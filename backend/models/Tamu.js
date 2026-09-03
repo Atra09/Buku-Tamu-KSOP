@@ -1,0 +1,68 @@
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
+
+const Tamu = sequelize.define('Tamu', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  no_reg: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
+  },
+  nama: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  no_telpon: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  kategori_asal: {
+    type: DataTypes.STRING,
+    defaultValue: 'Instansi' // Instansi, Masyarakat, Perusahaan, Lainnya
+  },
+  asal_instansi: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  jenis_kelamin: {
+    type: DataTypes.STRING,
+    allowNull: false // Laki-laki / Perempuan
+  },
+  alamat: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  bertemu: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  keperluan: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  foto: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tanggal: {
+    type: DataTypes.DATEONLY,
+    allowNull: false
+  },
+  jam: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  status: {
+    type: DataTypes.ENUM('Berkunjung', 'Selesai'),
+    defaultValue: 'Berkunjung'
+  }
+}, {
+  tableName: 'tamu',
+  timestamps: true
+});
+
+module.exports = Tamu;
