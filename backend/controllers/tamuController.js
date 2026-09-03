@@ -51,10 +51,22 @@ exports.getAllTamu = async (req, res) => {
       offset: parseInt(offset)
     });
 
+    const mappedRows = rows.map(item => {
+      const g = item.toJSON();
+      if (g.status === 'Selesai' && !g.tanggal_keluar && g.updatedAt) {
+        try {
+          const updatedDate = new Date(g.updatedAt);
+          g.tanggal_keluar = updatedDate.toISOString().split('T')[0];
+          g.jam_keluar = updatedDate.toTimeString().split(' ')[0];
+        } catch (e) {}
+      }
+      return g;
+    });
+
     res.json({
       success: true,
       total: count,
-      data: rows
+      data: mappedRows
     });
   } catch (error) {
     console.error('Error getAllTamu:', error);
@@ -172,7 +184,18 @@ exports.updateStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Data tamu tidak ditemukan' });
     }
 
-    tamu.status = status || 'Selesai';
+    const nextStatus = status || (tamu.status === 'Berkunjung' ? 'Selesai' : 'Berkunjung');
+    tamu.status = nextStatus;
+
+    if (nextStatus === 'Selesai') {
+      const now = new Date();
+      tamu.tanggal_keluar = now.toISOString().split('T')[0];
+      tamu.jam_keluar = now.toTimeString().split(' ')[0];
+    } else {
+      tamu.tanggal_keluar = null;
+      tamu.jam_keluar = null;
+    }
+
     await tamu.save();
 
     res.json({ success: true, message: 'Status tamu diperbarui', data: tamu });
@@ -197,11 +220,21 @@ exports.deleteTamu = async (req, res) => {
   }
 };
 
+// Helper for local YYYY-MM-DD string
+const getLocalDateString = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // Get Dashboard Statistics
 exports.getStats = async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const firstDayOfMonth = today.substring(0, 8) + '01';
+    const now = new Date();
+    const today = getLocalDateString(now);
+    const currentYear = now.getFullYear();
+    const firstDayOfMonth = `${today.substring(0, 7)}-01`;
 
     const totalHariIni = await Tamu.count({ where: { tanggal: today } });
     const totalBulanIni = await Tamu.count({
@@ -212,10 +245,83 @@ exports.getStats = async (req, res) => {
 
     const sedangBerkunjung = await Tamu.count({ where: { status: 'Berkunjung' } });
 
-    // Distribution by category
-    const countInstansi = await Tamu.count({ where: { kategori_asal: 'Instansi' } });
-    const countMasyarakat = await Tamu.count({ where: { kategori_asal: 'Masyarakat' } });
-    const countPerusahaan = await Tamu.count({ where: { kategori_asal: 'Perusahaan' } });
+    // 1. Distribution by category (Exact match with dropdown values)
+    const countInstansi = await Tamu.count({
+      where: {
+        kategori_asal: { [Op.or]: ['Instansi', 'Instansi / Dinas'] }
+      }
+    });
+    const countPerusahaan = await Tamu.count({
+      where: {
+        kategori_asal: { [Op.or]: ['Perusahaan', 'Perusahaan / Swasta'] }
+      }
+    });
+    const countMasyarakat = await Tamu.count({
+      where: {
+        kategori_asal: { [Op.or]: ['Masyarakat', 'Masyarakat Umum'] }
+      }
+    });
+    const countLainnya = await Tamu.count({
+      where: {
+        kategori_asal: { [Op.notIn]: ['Instansi', 'Instansi / Dinas', 'Perusahaan', 'Perusahaan / Swasta', 'Masyarakat', 'Masyarakat Umum'] }
+      }
+    });
+
+    const categoryStats = [
+      { label: 'Instansi / Dinas', value: countInstansi },
+      { label: 'Perusahaan / Swasta', value: countPerusahaan },
+      { label: 'Masyarakat Umum', value: countMasyarakat },
+      { label: 'Lainnya', value: countLainnya }
+    ];
+
+    // 2. Weekly Stats (Senin hingga Minggu dari minggu berjalan)
+    const dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    
+    // Hitung tanggal Hari Senin dari minggu berjalan
+    const dayOfWeek = now.getDay(); // 0: Minggu, 1: Senin, ..., 6: Sabtu
+    const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + distanceToMonday);
+
+    const weeklyStats = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = getLocalDateString(d);
+      const count = await Tamu.count({ where: { tanggal: dateStr } });
+      const dayLabel = dayNames[i];
+      const shortDate = `${d.getDate()}/${d.getMonth() + 1}`;
+      weeklyStats.push({
+        label: `${dayLabel} (${shortDate})`,
+        day: dayLabel,
+        date: dateStr,
+        count
+      });
+    }
+
+    // 3. Monthly Stats (12 bulan tahun berjalan dengan kalkulasi akhir bulan presisi)
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const monthlyStats = [];
+    for (let m = 0; m < 12; m++) {
+      const mStr = String(m + 1).padStart(2, '0');
+      const lastDay = new Date(currentYear, m + 1, 0).getDate();
+      const startOfMonth = `${currentYear}-${mStr}-01`;
+      const endOfMonth = `${currentYear}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+      
+      const count = await Tamu.count({
+        where: {
+          tanggal: {
+            [Op.between]: [startOfMonth, endOfMonth]
+          }
+        }
+      });
+
+      monthlyStats.push({
+        label: monthNames[m],
+        month: monthNames[m],
+        count
+      });
+    }
 
     res.json({
       success: true,
@@ -226,8 +332,12 @@ exports.getStats = async (req, res) => {
         kategori: {
           instansi: countInstansi,
           masyarakat: countMasyarakat,
-          perusahaan: countPerusahaan
-        }
+          perusahaan: countPerusahaan,
+          lainnya: countLainnya
+        },
+        categoryStats,
+        weeklyStats,
+        monthlyStats
       }
     });
   } catch (error) {

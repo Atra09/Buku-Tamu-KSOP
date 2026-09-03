@@ -1,8 +1,8 @@
 import React from 'react';
-import DashboardAdmin from './DashboardAdmin';
+import DaftarKunjungan from './DaftarKunjungan';
 
 const DataTamu = () => {
-  return <DashboardAdmin />;
+  return <DaftarKunjungan />;
 };
 
 export default DataTamu;

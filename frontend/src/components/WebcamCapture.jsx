@@ -1,25 +1,128 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, CheckCircle2, AlertCircle, Upload, Video } from 'lucide-react';
 
+if (typeof window !== 'undefined' && !window.__ACTIVE_WEBCAM_STREAMS__) {
+  window.__ACTIVE_WEBCAM_STREAMS__ = new Set();
+}
+
+export const stopAllGlobalWebcamStreams = () => {
+  if (typeof window !== 'undefined' && window.__ACTIVE_WEBCAM_STREAMS__) {
+    window.__ACTIVE_WEBCAM_STREAMS__.forEach(stream => {
+      try {
+        if (stream && typeof stream.getTracks === 'function') {
+          const tracks = stream.getTracks();
+          tracks.forEach(track => {
+            try {
+              track.enabled = false;
+              track.stop();
+              if (typeof stream.removeTrack === 'function') {
+                stream.removeTrack(track);
+              }
+            } catch (e) {}
+          });
+        }
+      } catch (e) {}
+    });
+    window.__ACTIVE_WEBCAM_STREAMS__.clear();
+  }
+};
+
 const WebcamCapture = ({ onCapture, currentPhoto }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const streamRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const shouldCameraBeOnRef = useRef(false);
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
   const [capturedImage, setCapturedImage] = useState(currentPhoto || null);
 
   useEffect(() => {
+    isMountedRef.current = true;
     if (!capturedImage) {
       startCamera();
     }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopCamera();
+      } else if (!capturedImage && isMountedRef.current) {
+        startCamera();
+      }
+    };
+
+    window.addEventListener('popstate', stopCamera);
+    window.addEventListener('beforeunload', stopCamera);
+    window.addEventListener('pagehide', stopCamera);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      isMountedRef.current = false;
+      shouldCameraBeOnRef.current = false;
+      window.removeEventListener('popstate', stopCamera);
+      window.removeEventListener('beforeunload', stopCamera);
+      window.removeEventListener('pagehide', stopCamera);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopCamera();
     };
   }, []);
 
+  const killStreamTracks = (streamToKill) => {
+    if (!streamToKill) return;
+    try {
+      const tracks = typeof streamToKill.getTracks === 'function' ? streamToKill.getTracks() : [];
+      tracks.forEach(track => {
+        try {
+          track.enabled = false;
+          track.stop();
+          if (typeof streamToKill.removeTrack === 'function') {
+            streamToKill.removeTrack(track);
+          }
+        } catch (e) {}
+      });
+    } catch (e) {
+      console.warn('Error killing tracks:', e);
+    }
+  };
+
+  const stopCamera = () => {
+    // 1. Matikan izin kamera seketika
+    shouldCameraBeOnRef.current = false;
+
+    // 2. Tangkap stream dari streamRef & videoRef.srcObject
+    const activeStream = streamRef.current;
+    const videoStream = videoRef.current ? videoRef.current.srcObject : null;
+
+    // 3. Hentikan elemen video & lepas ikatan srcObject
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+        videoRef.current.load();
+      } catch (e) {}
+    }
+
+    // 4. Matikan seluruh track lokal & global secara fisik
+    killStreamTracks(activeStream);
+    killStreamTracks(videoStream);
+    stopAllGlobalWebcamStreams();
+
+    streamRef.current = null;
+
+    if (isMountedRef.current) {
+      setIsStreaming(false);
+    }
+  };
+
   const startCamera = async () => {
     setError(null);
+    shouldCameraBeOnRef.current = true;
+
+    // Bersihkan seluruh stream lama di tingkat global
+    stopAllGlobalWebcamStreams();
+
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Browser tidak mendukung akses kamera langsung');
@@ -28,31 +131,38 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
         });
       } catch (e) {
-        // Fallback to basic video constraint
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
-      if (videoRef.current) {
+      // Daftarkan stream baru ke daftar aktif global
+      if (stream && window.__ACTIVE_WEBCAM_STREAMS__) {
+        window.__ACTIVE_WEBCAM_STREAMS__.add(stream);
+      }
+
+      // CRITICAL GUARD: Jika kamera di-stop saat getUserMedia sedang diproses (pending)
+      if (!shouldCameraBeOnRef.current || !isMountedRef.current) {
+        stopAllGlobalWebcamStreams();
+        return;
+      }
+
+      streamRef.current = stream;
+
+      if (videoRef.current && shouldCameraBeOnRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => {});
-        setIsStreaming(true);
+        if (isMountedRef.current && shouldCameraBeOnRef.current) {
+          setIsStreaming(true);
+        }
       }
     } catch (err) {
-      console.warn('Camera access error:', err);
-      setError('Kamera tidak terdeteksi atau izin ditolak browser.');
-      setIsStreaming(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks();
-      tracks.forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-      setIsStreaming(false);
+      if (isMountedRef.current && shouldCameraBeOnRef.current) {
+        console.warn('Camera access error:', err);
+        setError('Kamera tidak terdeteksi atau izin ditolak browser.');
+        setIsStreaming(false);
+      }
     }
   };
 
@@ -64,21 +174,35 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
       canvas.height = video.videoHeight || 480;
 
       const ctx = canvas.getContext('2d');
+
+      // Cermin horizontal canvas agar HASIL FOTO SAMA PERSIS dengan PRATINJAU KAMERA LIVE (-scale-x-100)
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+      // KUNCI: Matikan hardware kamera DULUAN sebelum React menghapus elemen <video> dari DOM!
+      stopCamera();
+
       setCapturedImage(dataUrl);
       if (onCapture) {
         onCapture(dataUrl);
       }
-      stopCamera();
     }
   };
 
   const resetPhoto = () => {
+    stopCamera();
     setCapturedImage(null);
     if (onCapture) onCapture(null);
-    startCamera();
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        startCamera();
+      }
+    }, 50);
   };
 
   const handleFileUpload = (e) => {
@@ -192,15 +316,6 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
             Ambil Foto
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="cursor-pointer bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200/80 text-xs font-bold py-3 px-4 rounded-xl flex items-center gap-1.5 shrink-0 transition-all shadow-xs"
-        >
-          <Upload className="w-4 h-4 text-sky-600" />
-          <span>Upload</span>
-        </button>
       </div>
     </div>
   );

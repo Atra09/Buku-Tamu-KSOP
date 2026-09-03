@@ -59,6 +59,14 @@ const Tamu = sequelize.define('Tamu', {
   status: {
     type: DataTypes.ENUM('Berkunjung', 'Selesai'),
     defaultValue: 'Berkunjung'
+  },
+  tanggal_keluar: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  jam_keluar: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   tableName: 'tamu',

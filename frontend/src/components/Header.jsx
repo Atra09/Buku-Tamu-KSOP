@@ -73,7 +73,7 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
               {companyName}
             </h1>
             <p className="text-[11px] font-bold text-sky-600 tracking-wide uppercase">
-              Halaman Utama Buku Tamu Digital
+              Buku Tamu Digital
             </p>
           </div>
         </div>

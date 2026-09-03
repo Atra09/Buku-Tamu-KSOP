@@ -103,15 +103,21 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                <div className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{guest.tanggal}</span>
+              <div className="space-y-1 text-[11px] text-slate-600 pt-2 border-t border-emerald-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 font-bold text-sky-700">
+                    <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                    <span>Datang: {guest.tanggal} ({guest.jam})</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{guest.jam}</span>
-                </div>
+                {guest.status === 'Selesai' && guest.tanggal_keluar && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 font-bold text-emerald-700">
+                      <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Keluar: {guest.tanggal_keluar} ({guest.jam_keluar})</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
