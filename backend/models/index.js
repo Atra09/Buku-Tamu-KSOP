@@ -4,6 +4,7 @@ const MasterTujuan = require('./MasterTujuan');
 const MasterKeperluan = require('./MasterKeperluan');
 const MasterKategoriAsal = require('./MasterKategoriAsal');
 const User = require('./User');
+const ActivityLog = require('./ActivityLog');
 
 // Foreign Key Associations for Relational MySQL ERD Diagram
 MasterTujuan.hasMany(Tamu, { foreignKey: 'tujuan_id' });
@@ -14,6 +15,12 @@ Tamu.belongsTo(MasterKeperluan, { foreignKey: 'keperluan_id' });
 
 MasterKategoriAsal.hasMany(Tamu, { foreignKey: 'kategori_asal_id' });
 Tamu.belongsTo(MasterKategoriAsal, { foreignKey: 'kategori_asal_id' });
+
+User.hasMany(Tamu, { foreignKey: 'user_id' });
+Tamu.belongsTo(User, { foreignKey: 'user_id' });
+
+User.hasMany(ActivityLog, { foreignKey: 'user_id' });
+ActivityLog.belongsTo(User, { foreignKey: 'user_id' });
 
 const seedInitialData = async () => {
   try {

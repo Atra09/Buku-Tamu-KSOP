@@ -1,4 +1,5 @@
-const { User } = require('../models');
+const bcrypt = require('bcryptjs');
+const { User, ActivityLog } = require('../models');
 
 // POST /api/auth/login
 exports.login = async (req, res) => {
@@ -14,14 +15,41 @@ exports.login = async (req, res) => {
 
     const user = await User.findOne({ where: { username } });
 
-    if (!user || user.password !== password) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Username atau password tidak valid'
       });
     }
 
-    // Return user info and mock token for session auth
+    // Check password with bcrypt or fallback to plaintext comparison
+    let isMatch = false;
+    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+      isMatch = await bcrypt.compare(password, user.password);
+    } else {
+      isMatch = (user.password === password);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Username atau password tidak valid'
+      });
+    }
+
+    // Record Login Activity
+    try {
+      await ActivityLog.create({
+        user_nama: user.nama,
+        user_id: user.id,
+        action: 'LOGIN',
+        details: `User ${user.username} (${user.role}) berhasil login ke sistem`
+      });
+    } catch (e) {
+      console.error('Error recording login log:', e);
+    }
+
+    // Return user info and session token
     res.json({
       success: true,
       message: 'Login berhasil',

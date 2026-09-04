@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, ClipboardList, Building, Layers, ExternalLink, LogOut,
+  LayoutDashboard, ClipboardList, Building, Layers, Users, History, ExternalLink, LogOut,
   ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 
@@ -10,6 +10,8 @@ const navItems = [
   { label: 'Daftar Kunjungan', key: 'tamu', to: '/admin/tamu', icon: ClipboardList },
   { label: 'Tujuan Kunjungan', key: 'tujuan', to: '/admin/tujuan', icon: Building },
   { label: 'Kategori Asal', key: 'kategori-asal', to: '/admin/kategori-asal', icon: Layers },
+  { label: 'Kelola Akun User', key: 'users', to: '/admin/users', icon: Users },
+  { label: 'Log Aktivitas', key: 'log-aktivitas', to: '/admin/log-aktivitas', icon: History },
 ];
 
 const AdminLayout = ({ children, title, subtitle, activeTab }) => {

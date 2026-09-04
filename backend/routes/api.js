@@ -7,6 +7,8 @@ const fs = require('fs');
 const tamuController = require('../controllers/tamuController');
 const masterController = require('../controllers/masterController');
 const authController = require('../controllers/authController');
+const userController = require('../controllers/userController');
+const activityController = require('../controllers/activityController');
 
 // Auth Routes
 router.post('/auth/login', authController.login);
@@ -38,7 +40,6 @@ router.post('/tamu', upload.single('foto'), tamuController.createTamu);
 router.patch('/tamu/:id/status', tamuController.updateStatus);
 router.delete('/tamu/:id', tamuController.deleteTamu);
 
-
 // Master Data Routes
 router.get('/master/dropdowns', masterController.getDropdownData);
 router.post('/master/tujuan', masterController.addTujuan);
@@ -48,5 +49,14 @@ router.post('/master/keperluan', masterController.addKeperluan);
 router.post('/master/kategori-asal', masterController.addKategoriAsal);
 router.put('/master/kategori-asal/:id', masterController.updateKategoriAsal);
 router.delete('/master/kategori-asal/:id', masterController.deleteKategoriAsal);
+
+// User Management Routes
+router.get('/users', userController.getAllUsers);
+router.post('/users', userController.createUser);
+router.put('/users/:id', userController.updateUser);
+router.delete('/users/:id', userController.deleteUser);
+
+// Activity Log Routes
+router.get('/logs', activityController.getActivityLogs);
 
 module.exports = router;

@@ -72,6 +72,14 @@ const Tamu = sequelize.define('Tamu', {
       key: 'id'
     }
   },
+  user_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
   foto: {
     type: DataTypes.STRING,
     allowNull: true

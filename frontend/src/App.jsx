@@ -4,7 +4,8 @@ import PublicKsop from './pages/PublicKsop';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DaftarKunjungan from './pages/DaftarKunjungan';
 import TujuanKunjungan from './pages/TujuanKunjungan';
-import KategoriAsal from './pages/KategoriAsal';
+import UserManagement from './pages/UserManagement';
+import ActivityLogPage from './pages/ActivityLogPage';
 import LoginPage from './pages/LoginPage';
 import { stopAllGlobalWebcamStreams } from './components/WebcamCapture';
 
@@ -89,6 +90,22 @@ function App() {
           element={
             <AdminOnlyRoute>
               <KategoriAsal />
+            </AdminOnlyRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminOnlyRoute>
+              <UserManagement />
+            </AdminOnlyRoute>
+          }
+        />
+        <Route
+          path="/admin/log-aktivitas"
+          element={
+            <AdminOnlyRoute>
+              <ActivityLogPage />
             </AdminOnlyRoute>
           }
         />
