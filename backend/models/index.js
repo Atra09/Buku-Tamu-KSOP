@@ -2,6 +2,7 @@ const { sequelize } = require('../config/database');
 const Tamu = require('./Tamu');
 const MasterTujuan = require('./MasterTujuan');
 const MasterKeperluan = require('./MasterKeperluan');
+const MasterKategoriAsal = require('./MasterKategoriAsal');
 const User = require('./User');
 
 const seedInitialData = async () => {
@@ -44,6 +45,17 @@ const seedInitialData = async () => {
       console.log('Seeded Master Keperluan');
     }
 
+    const kategoriAsalCount = await MasterKategoriAsal.count();
+    if (kategoriAsalCount === 0) {
+      await MasterKategoriAsal.bulkCreate([
+        { nama_kategori: 'Instansi / Dinas', butuh_instansi: true },
+        { nama_kategori: 'Masyarakat Umum', butuh_instansi: false },
+        { nama_kategori: 'Perusahaan / Swasta', butuh_instansi: true },
+        { nama_kategori: 'Lainnya', butuh_instansi: true }
+      ]);
+      console.log('Seeded Master Kategori Asal');
+    }
+
     // Seed dummy tamu if empty
     const tamuCount = await Tamu.count();
     if (tamuCount === 0) {
@@ -52,7 +64,7 @@ const seedInitialData = async () => {
         no_reg: 'REG-' + Date.now().toString().slice(-6),
         nama: 'Budi Santoso',
         no_telpon: '081234567890',
-        kategori_asal: 'Instansi',
+        kategori_asal: 'Instansi / Dinas',
         asal_instansi: 'PT. Maritime Logistics',
         jenis_kelamin: 'Laki-laki',
         alamat: 'Jl. Pelabuhan No. 45, Surabaya',
@@ -76,6 +88,7 @@ module.exports = {
   Tamu,
   MasterTujuan,
   MasterKeperluan,
+  MasterKategoriAsal,
   User,
   seedInitialData
 };

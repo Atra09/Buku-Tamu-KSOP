@@ -45,5 +45,8 @@ router.post('/master/tujuan', masterController.addTujuan);
 router.put('/master/tujuan/:id', masterController.updateTujuan);
 router.delete('/master/tujuan/:id', masterController.deleteTujuan);
 router.post('/master/keperluan', masterController.addKeperluan);
+router.post('/master/kategori-asal', masterController.addKategoriAsal);
+router.put('/master/kategori-asal/:id', masterController.updateKategoriAsal);
+router.delete('/master/kategori-asal/:id', masterController.deleteKategoriAsal);
 
 module.exports = router;

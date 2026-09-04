@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, RefreshCw, CheckCircle2, AlertCircle, Upload, Video } from 'lucide-react';
+import { Camera, RefreshCw, CheckCircle2, AlertCircle, Upload, Video, MapPin } from 'lucide-react';
 
 if (typeof window !== 'undefined' && !window.__ACTIVE_WEBCAM_STREAMS__) {
   window.__ACTIVE_WEBCAM_STREAMS__ = new Set();
@@ -27,20 +27,33 @@ export const stopAllGlobalWebcamStreams = () => {
   }
 };
 
-const WebcamCapture = ({ onCapture, currentPhoto }) => {
+const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const streamRef = useRef(null);
   const isMountedRef = useRef(true);
   const shouldCameraBeOnRef = useRef(false);
+  const onLocationChangeRef = useRef(onLocationChange);
+
+  useEffect(() => {
+    onLocationChangeRef.current = onLocationChange;
+  }, [onLocationChange]);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
   const [capturedImage, setCapturedImage] = useState(currentPhoto || null);
+  const [locationText, setLocationText] = useState('Mendeteksi Lokasi...');
+  const locationTextRef = useRef(locationText);
+
+  useEffect(() => {
+    locationTextRef.current = locationText;
+  }, [locationText]);
 
   useEffect(() => {
     isMountedRef.current = true;
+    detectUserLocation();
+
     if (!capturedImage) {
       startCamera();
     }
@@ -69,6 +82,224 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
     };
   }, []);
 
+  const fallbackIpLocation = async () => {
+    try {
+      const res = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=id');
+      if (res.ok) {
+        const data = await res.json();
+        let desa = '';
+        let kecamatan = data.locality || '';
+        let kabupaten = data.city || data.principalSubdivision || '';
+
+        if (data.localityInfo && data.localityInfo.administrative) {
+          const admin = data.localityInfo.administrative;
+          const lvl7 = admin.find(a => a.adminLevel === 7 || a.adminLevel === 8);
+          if (lvl7) desa = lvl7.name;
+          const lvl6 = admin.find(a => a.adminLevel === 6);
+          if (lvl6) kecamatan = lvl6.name;
+          const lvl5 = admin.find(a => a.adminLevel === 5);
+          if (lvl5) kabupaten = lvl5.name;
+        }
+
+        const parts = [];
+        if (desa) parts.push(desa.toLowerCase().startsWith('desa') || desa.toLowerCase().startsWith('kel') ? desa : `Desa ${desa}`);
+        if (kecamatan) parts.push(`Kec. ${kecamatan.replace(/^Kecamatan\s+/i, '')}`);
+        if (kabupaten) parts.push(`Kab. ${kabupaten.replace(/^Kabupaten\s+/i, '')}`);
+
+        const fullLoc = parts.length > 0 ? parts.join(', ') : 'Lokasi Tidak Terdeteksi';
+        if (isMountedRef.current) {
+          setLocationText(fullLoc);
+          if (onLocationChangeRef.current) onLocationChangeRef.current(fullLoc);
+        }
+        return;
+      }
+    } catch (e) {
+      console.error('IP Geolocation fallback error:', e);
+    }
+
+    if (isMountedRef.current) {
+      setLocationText('Lokasi Tidak Terdeteksi');
+      if (onLocationChangeRef.current) onLocationChangeRef.current('Lokasi Tidak Terdeteksi');
+    }
+  };
+
+  const detectUserLocation = () => {
+    if (!navigator.geolocation) {
+      fallbackIpLocation();
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          // 1. Fetch BigDataCloud API
+          let bdcData = null;
+          try {
+            const bdcRes = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=id`
+            );
+            if (bdcRes.ok) {
+              bdcData = await bdcRes.json();
+            }
+          } catch (e) {}
+
+          // 2. Fetch OpenStreetMap Nominatim API (Zoom 18 for street/building + Zoom 14 for village/subdistrict)
+          let nomData = null;
+          let nomDataVillage = null;
+          try {
+            const [nomRes, nomResVillage] = await Promise.all([
+              fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18`,
+                { headers: { 'Accept-Language': 'id', 'User-Agent': 'SiTamuApp/1.0' } }
+              ),
+              fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
+                { headers: { 'Accept-Language': 'id', 'User-Agent': 'SiTamuApp/1.0' } }
+              )
+            ]);
+            if (nomRes.ok) nomData = await nomRes.json();
+            if (nomResVillage && nomResVillage.ok) nomDataVillage = await nomResVillage.json();
+          } catch (e) {}
+
+          const nomAddress = (nomData && nomData.address) || {};
+          const nomAddressVillage = (nomDataVillage && nomDataVillage.address) || {};
+
+          let gedung = nomAddress.building ||
+                       nomAddress.office ||
+                       nomAddress.amenity ||
+                       nomAddress.government ||
+                       nomAddress.public_building ||
+                       nomAddress.commercial ||
+                       nomAddress.industrial ||
+                       nomAddress.shop ||
+                       nomAddress.tourism ||
+                       nomAddress.historic || '';
+          if (/^\d+[-\d\s]*$/.test(gedung) || gedung.length < 3) gedung = '';
+
+          let jalan = (nomAddress.road || nomAddress.pedestrian || nomAddress.street || '').trim();
+          if (/^\d+[-\d\s]*$/.test(jalan) || jalan.length <= 3) {
+            jalan = '';
+          } else if (!jalan.toLowerCase().startsWith('jl') && !jalan.toLowerCase().startsWith('jalan') && !jalan.toLowerCase().startsWith('gang') && !jalan.toLowerCase().startsWith('gg')) {
+            jalan = `Jl. ${jalan}`;
+          }
+
+          let desa = nomAddress.village ||
+                     nomAddress.suburb ||
+                     nomAddress.neighbourhood ||
+                     nomAddress.hamlet ||
+                     nomAddress.quarter ||
+                     nomAddress.residential ||
+                     nomAddressVillage.village ||
+                     nomAddressVillage.suburb ||
+                     nomAddressVillage.neighbourhood ||
+                     nomAddressVillage.hamlet ||
+                     nomAddressVillage.town || '';
+
+          if (!desa && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
+            const admin = bdcData.localityInfo.administrative;
+            const lvl8 = admin.find(a => a.adminLevel === 8);
+            if (lvl8) desa = lvl8.name;
+          }
+
+          let kecamatan = nomAddress.subdistrict || nomAddress.district || nomAddress.city_district || nomAddressVillage.subdistrict || nomAddressVillage.district || '';
+          if (!kecamatan && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
+            const admin = bdcData.localityInfo.administrative;
+            const lvl7 = admin.find(a => a.adminLevel === 7);
+            if (lvl7) kecamatan = lvl7.name;
+            else if (bdcData.locality) kecamatan = bdcData.locality;
+          }
+
+          let kabupaten = nomAddress.regency || nomAddress.county || nomAddress.city || nomAddress.town || nomAddress.municipality || '';
+          if (!kabupaten && bdcData) {
+            if (bdcData.localityInfo && bdcData.localityInfo.administrative) {
+              const admin = bdcData.localityInfo.administrative;
+              const lvl5or6 = admin.find(a => a.adminLevel === 5 || a.adminLevel === 6);
+              if (lvl5or6) kabupaten = lvl5or6.name;
+            }
+            if (!kabupaten && bdcData.city) kabupaten = bdcData.city;
+          }
+
+          // Fallback parsing from display_name (filtering out street names, buildings, districts)
+          const displayParts = (nomData && nomData.display_name ? nomData.display_name : '').split(',').map(s => s.trim());
+          const cleanDisplayParts = displayParts.filter(p => {
+            if (!p) return false;
+            const l = p.toLowerCase();
+            if (l === 'indonesia' || l === 'jawa timur' || l === 'east java' || /^\d{5}$/.test(p) || /^\d+[-\d\s]*$/.test(p)) return false;
+            return true;
+          });
+
+          if (!desa && cleanDisplayParts.length > 0) {
+            const candidate = cleanDisplayParts.find(p => {
+              const l = p.toLowerCase();
+              if (l.startsWith('jl') || l.startsWith('jalan') || l.startsWith('gang') || l.startsWith('gg')) return false;
+              if (jalan && (l.includes(jalan.toLowerCase()) || jalan.toLowerCase().includes(l))) return false;
+              if (gedung && (l.includes(gedung.toLowerCase()) || gedung.toLowerCase().includes(l))) return false;
+              if (kecamatan && (l.includes(kecamatan.toLowerCase()) || kecamatan.toLowerCase().includes(l))) return false;
+              if (kabupaten && (l.includes(kabupaten.toLowerCase()) || kabupaten.toLowerCase().includes(l))) return false;
+              return true;
+            });
+            if (candidate) desa = candidate;
+          }
+
+          // Build ordered address hierarchy: [Gedung], [Jalan], [Desa], [Kecamatan], [Kabupaten]
+          const parts = [];
+
+          // 1. Gedung / Tempat
+          if (gedung) {
+            parts.push(gedung);
+          }
+
+          // 2. Jalan
+          if (jalan && (!gedung || !gedung.toLowerCase().includes(jalan.toLowerCase()))) {
+            parts.push(jalan);
+          }
+
+          // 3. Desa / Kelurahan
+          if (desa) {
+            const lowerDesa = desa.toLowerCase();
+            const isStreetName = lowerDesa.startsWith('jl') || lowerDesa.startsWith('jalan') || lowerDesa.startsWith('gang') || lowerDesa.startsWith('gg');
+            if (!isStreetName && (!jalan || !lowerDesa.includes(jalan.toLowerCase()))) {
+              const desaClean = desa.replace(/^(desa|kelurahan|kel\.)\s+/i, '');
+              parts.push(lowerDesa.startsWith('kel') ? `Kel. ${desaClean}` : `Desa ${desaClean}`);
+            }
+          }
+
+          // 4. Kecamatan
+          if (kecamatan) {
+            const kecClean = kecamatan.replace(/^(kecamatan|kec\.)\s+/i, '');
+            if (!desa || !desa.toLowerCase().includes(kecClean.toLowerCase())) {
+              parts.push(`Kec. ${kecClean}`);
+            }
+          }
+
+          // 5. Kabupaten / Kota
+          if (kabupaten) {
+            const kabClean = kabupaten.replace(/^(kabupaten|kab\.|kota)\s+/i, '');
+            if (!kecamatan || !kecamatan.toLowerCase().includes(kabClean.toLowerCase())) {
+              const kabFormatted = kabupaten.toLowerCase().startsWith('kota') ? `Kota ${kabClean}` : `Kab. ${kabClean}`;
+              parts.push(kabFormatted);
+            }
+          }
+
+          const fullLoc = parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+
+          if (isMountedRef.current) {
+            setLocationText(fullLoc);
+            if (onLocationChangeRef.current) onLocationChangeRef.current(fullLoc);
+          }
+        } catch (e) {
+          fallbackIpLocation();
+        }
+      },
+      (err) => {
+        console.warn('Geolocation error, falling back to IP Geolocation:', err);
+        fallbackIpLocation();
+      },
+      { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true }
+    );
+  };
+
   const killStreamTracks = (streamToKill) => {
     if (!streamToKill) return;
     try {
@@ -88,14 +319,10 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
   };
 
   const stopCamera = () => {
-    // 1. Matikan izin kamera seketika
     shouldCameraBeOnRef.current = false;
-
-    // 2. Tangkap stream dari streamRef & videoRef.srcObject
     const activeStream = streamRef.current;
     const videoStream = videoRef.current ? videoRef.current.srcObject : null;
 
-    // 3. Hentikan elemen video & lepas ikatan srcObject
     if (videoRef.current) {
       try {
         videoRef.current.pause();
@@ -104,7 +331,6 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
       } catch (e) {}
     }
 
-    // 4. Matikan seluruh track lokal & global secara fisik
     killStreamTracks(activeStream);
     killStreamTracks(videoStream);
     stopAllGlobalWebcamStreams();
@@ -120,7 +346,6 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
     setError(null);
     shouldCameraBeOnRef.current = true;
 
-    // Bersihkan seluruh stream lama di tingkat global
     stopAllGlobalWebcamStreams();
 
     try {
@@ -137,12 +362,10 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
-      // Daftarkan stream baru ke daftar aktif global
       if (stream && window.__ACTIVE_WEBCAM_STREAMS__) {
         window.__ACTIVE_WEBCAM_STREAMS__.add(stream);
       }
 
-      // CRITICAL GUARD: Jika kamera di-stop saat getUserMedia sedang diproses (pending)
       if (!shouldCameraBeOnRef.current || !isMountedRef.current) {
         stopAllGlobalWebcamStreams();
         return;
@@ -175,21 +398,19 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
 
       const ctx = canvas.getContext('2d');
 
-      // Cermin horizontal canvas agar HASIL FOTO SAMA PERSIS dengan PRATINJAU KAMERA LIVE (-scale-x-100)
       ctx.save();
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.restore();
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
 
-      // KUNCI: Matikan hardware kamera DULUAN sebelum React menghapus elemen <video> dari DOM!
       stopCamera();
 
       setCapturedImage(dataUrl);
       if (onCapture) {
-        onCapture(dataUrl);
+        onCapture(dataUrl, locationTextRef.current);
       }
     }
   };
@@ -197,7 +418,7 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
   const resetPhoto = () => {
     stopCamera();
     setCapturedImage(null);
-    if (onCapture) onCapture(null);
+    if (onCapture) onCapture(null, locationTextRef.current);
     setTimeout(() => {
       if (isMountedRef.current) {
         startCamera();
@@ -210,9 +431,22 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setCapturedImage(reader.result);
-        if (onCapture) onCapture(reader.result);
-        stopCamera();
+        const img = new Image();
+        img.onload = () => {
+          if (canvasRef.current) {
+            const canvas = canvasRef.current;
+            canvas.width = img.width || 640;
+            canvas.height = img.height || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const cleanDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            setCapturedImage(cleanDataUrl);
+            if (onCapture) onCapture(cleanDataUrl, locationTextRef.current);
+            stopCamera();
+          }
+        };
+        img.src = reader.result;
       };
       reader.readAsDataURL(file);
     }
@@ -270,6 +504,14 @@ const WebcamCapture = ({ onCapture, currentPhoto }) => {
           <div className="absolute top-2 left-2 bg-red-600/90 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
             LIVE CAMERA
+          </div>
+        )}
+
+        {/* Location Overlay Indicator */}
+        {isStreaming && !capturedImage && (
+          <div className="absolute bottom-2 left-2 bg-slate-950/80 backdrop-blur-xs text-sky-300 text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 border border-sky-500/30 shadow-md max-w-[90%] truncate">
+            <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
+            <span className="truncate">{locationText}</span>
           </div>
         )}
 

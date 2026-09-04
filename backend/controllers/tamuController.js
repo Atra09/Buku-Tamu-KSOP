@@ -100,15 +100,21 @@ exports.createTamu = async (req, res) => {
       asal_instansi,
       jenis_kelamin,
       alamat,
+      lokasi,
       bertemu,
       keperluan,
       foto_base64
     } = req.body;
 
-    if (!nama || !asal_instansi || !bertemu || !keperluan) {
+    const isMasyarakat = kategori_asal && kategori_asal.toLowerCase().includes('masyarakat');
+    const finalAsalInstansi = (asal_instansi && asal_instansi.trim())
+      ? asal_instansi.trim()
+      : (isMasyarakat ? 'Masyarakat Umum' : '-');
+
+    if (!nama || (!isMasyarakat && !asal_instansi) || !bertemu || !keperluan) {
       return res.status(400).json({
         success: false,
-        message: 'Mohon isi bidang yang wajib (Nama, Asal Instansi, Bertemu, Keperluan)'
+        message: 'Mohon isi bidang yang wajib (Nama, Bertemu, Keperluan)'
       });
     }
 
@@ -146,14 +152,20 @@ exports.createTamu = async (req, res) => {
       }
     }
 
+    const defaultFallbackLokasi = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
+    const finalLokasi = (lokasi && lokasi.trim() && lokasi !== 'Lokasi Tidak Terdeteksi' && lokasi !== 'Mendeteksi Lokasi...') 
+      ? lokasi.trim() 
+      : defaultFallbackLokasi;
+
     const newTamu = await Tamu.create({
       no_reg,
       nama,
       no_telpon: no_telpon || '',
-      kategori_asal: kategori_asal || 'Instansi',
-      asal_instansi,
+      kategori_asal: kategori_asal || 'Instansi / Dinas',
+      asal_instansi: finalAsalInstansi,
       jenis_kelamin: jenis_kelamin || 'Laki-laki',
       alamat: alamat || '',
+      lokasi: finalLokasi,
       bertemu,
       keperluan,
       foto: fotoPath,

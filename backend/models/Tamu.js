@@ -36,6 +36,10 @@ const Tamu = sequelize.define('Tamu', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  lokasi: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   bertemu: {
     type: DataTypes.STRING,
     allowNull: false

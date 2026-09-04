@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
-    "dev": "node ./bin/www"
+    "dev": "node --watch ./bin/www"
   },
   "dependencies": {
     "cors": "^2.8.5",

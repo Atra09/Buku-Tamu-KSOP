@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, ClipboardList, Building, ExternalLink, LogOut,
+  LayoutDashboard, ClipboardList, Building, Layers, ExternalLink, LogOut,
   ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 
@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Dashboard', key: 'dashboard', to: '/admin', icon: LayoutDashboard },
   { label: 'Daftar Kunjungan', key: 'tamu', to: '/admin/tamu', icon: ClipboardList },
   { label: 'Tujuan Kunjungan', key: 'tujuan', to: '/admin/tujuan', icon: Building },
+  { label: 'Kategori Asal', key: 'kategori-asal', to: '/admin/kategori-asal', icon: Layers },
 ];
 
 const AdminLayout = ({ children, title, subtitle, activeTab }) => {
@@ -95,7 +96,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
 
   const renderUserFooter = (collapsed = false) => (
     <div className={`border-t border-slate-900 bg-slate-900/50 flex items-center ${
-      collapsed ? 'p-3 flex-col gap-2 justify-center' : 'p-4 justify-between gap-3'
+      collapsed ? 'p-3 justify-center' : 'p-4 gap-3'
     }`}>
       <div className={`flex items-center gap-3 truncate ${collapsed ? 'justify-center' : ''}`}>
         <div className="w-9 h-9 rounded-full bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
@@ -108,14 +109,6 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
           </div>
         )}
       </div>
-
-      <button
-        onClick={handleLogout}
-        className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-        title="Keluar / Logout"
-      >
-        <LogOut className="w-4 h-4" />
-      </button>
     </div>
   );
 

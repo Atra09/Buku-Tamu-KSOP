@@ -4,6 +4,7 @@ import PublicKsop from './pages/PublicKsop';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DaftarKunjungan from './pages/DaftarKunjungan';
 import TujuanKunjungan from './pages/TujuanKunjungan';
+import KategoriAsal from './pages/KategoriAsal';
 import LoginPage from './pages/LoginPage';
 import { stopAllGlobalWebcamStreams } from './components/WebcamCapture';
 
@@ -32,15 +33,8 @@ function App() {
     <Router>
       <CameraRouteCleaner />
       <Routes>
-        {/* Public Guest Registration KSOP View (Protected) */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <PublicKsop />
-            </ProtectedRoute>
-          }
-        />
+        {/* Public Guest Registration KSOP View (Public Access) */}
+        <Route path="/" element={<PublicKsop />} />
 
         {/* Login Page */}
         <Route path="/login" element={<LoginPage />} />
@@ -70,6 +64,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/kategori-asal"
+          element={
+            <ProtectedRoute>
+              <KategoriAsal />
+            </ProtectedRoute>
+          }
+        />
+        {/* Fallback Wildcard Route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );

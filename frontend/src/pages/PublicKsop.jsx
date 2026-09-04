@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { UserCheck, Camera, Send, FileText, CheckCircle2, ShieldCheck, User, Building, Phone, MapPin, Tag } from 'lucide-react';
+import { UserCheck, Camera, Send, FileText, CheckCircle2, ShieldCheck, User, Building, Phone, MapPin, Tag, AlertCircle, X } from 'lucide-react';
 import Header from '../components/Header';
 import WebcamCapture from '../components/WebcamCapture';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
@@ -9,10 +9,11 @@ const PublicKsop = () => {
   const [formData, setFormData] = useState({
     nama: '',
     no_telpon: '',
-    kategori_asal: 'Instansi',
+    kategori_asal: '',
     asal_instansi: '',
     jenis_kelamin: 'Laki-laki',
     alamat: '',
+    lokasi: '',
     bertemu: '',
     keperluan: ''
   });
@@ -20,9 +21,23 @@ const PublicKsop = () => {
   const [fotoBase64, setFotoBase64] = useState(null);
   const [tujuanList, setTujuanList] = useState([]);
   const [keperluanList, setKeperluanList] = useState([]);
+  const [kategoriAsalList, setKategoriAsalList] = useState([]);
+  const [kategoriAsalObjects, setKategoriAsalObjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [registeredGuest, setRegisteredGuest] = useState(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
+
+  const latestLocationRef = useRef('');
+
+  // Toast Notification State
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
 
   useEffect(() => {
     fetchDropdowns();
@@ -32,11 +47,21 @@ const PublicKsop = () => {
     try {
       const res = await axios.get('/api/master/dropdowns');
       if (res.data && res.data.data) {
-        setTujuanList(res.data.data.tujuan || []);
-        setKeperluanList(res.data.data.keperluan || []);
-        if (res.data.data.tujuan.length > 0) {
-          setFormData(prev => ({ ...prev, bertemu: res.data.data.tujuan[0] }));
-        }
+        const fetchedTujuan = res.data.data.tujuan || [];
+        const fetchedKeperluan = res.data.data.keperluan || [];
+        const fetchedKategori = res.data.data.kategoriAsal || [];
+        const fetchedKategoriObjects = res.data.data.kategoriAsalList || [];
+
+        setTujuanList(fetchedTujuan);
+        setKeperluanList(fetchedKeperluan);
+        setKategoriAsalList(fetchedKategori);
+        setKategoriAsalObjects(fetchedKategoriObjects);
+
+        setFormData(prev => ({
+          ...prev,
+          bertemu: fetchedTujuan.length > 0 ? fetchedTujuan[0] : prev.bertemu,
+          kategori_asal: fetchedKategori.length > 0 ? fetchedKategori[0] : prev.kategori_asal
+        }));
       }
     } catch (err) {
       console.error('Error fetching dropdowns:', err);
@@ -66,17 +91,60 @@ const PublicKsop = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const checkIsOnlyAddress = (kategoriName) => {
+    const selectedCatObj = kategoriAsalObjects.find(k => k.nama_kategori === kategoriName);
+    if (selectedCatObj) {
+      const val = selectedCatObj.butuh_instansi;
+      if (val === false || val === 0 || val === 'false' || val === '0') return true;
+      if (val === true || val === 1 || val === 'true' || val === '1') return false;
+    }
+    return kategoriName && kategoriName.toLowerCase().includes('masyarakat');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.nama.trim() || !formData.asal_instansi.trim()) {
-      alert('Mohon lengkapi Nama dan Asal Instansi!');
+    const isOnlyAddress = checkIsOnlyAddress(formData.kategori_asal);
+
+    if (!formData.nama.trim()) {
+      showToast('Mohon isi Nama Tamu!', 'error');
+      return;
+    }
+
+    if (isOnlyAddress && !formData.alamat.trim()) {
+      showToast('Mohon isi Alamat Lengkap / Domisili Tamu!', 'error');
+      return;
+    }
+
+    if (!isOnlyAddress && !formData.asal_instansi.trim()) {
+      showToast('Mohon isi Nama Asal Instansi / Perusahaan!', 'error');
+      return;
+    }
+
+    if (!fotoBase64) {
+      showToast('Wajib mengambil atau mengunggah foto tamu terlebih dahulu!', 'error');
       return;
     }
 
     setLoading(true);
     try {
+      const isInvalid = (val) => !val || !val.trim() || val === 'Lokasi Tidak Terdeteksi' || val === 'Mendeteksi Lokasi...';
+
+      let validLokasi = formData.lokasi;
+      if (isInvalid(validLokasi)) {
+        validLokasi = latestLocationRef.current;
+      }
+      if (isInvalid(validLokasi)) {
+        validLokasi = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
+      }
+
+      const finalAsalInstansi = isOnlyAddress 
+        ? (formData.kategori_asal || 'Masyarakat Umum')
+        : formData.asal_instansi.trim();
+
       const payload = {
         ...formData,
+        asal_instansi: finalAsalInstansi,
+        lokasi: validLokasi,
         foto_base64: fotoBase64
       };
 
@@ -98,7 +166,7 @@ const PublicKsop = () => {
       }
     } catch (err) {
       console.error('Error registering guest:', err);
-      alert('Gagal menyimpan registrasi tamu: ' + (err.response?.data?.message || err.message));
+      showToast('Gagal menyimpan registrasi tamu: ' + (err.response?.data?.message || err.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -163,10 +231,9 @@ const PublicKsop = () => {
                     onChange={handleChange}
                     className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
                   >
-                    <option value="Instansi">Instansi / Dinas</option>
-                    <option value="Masyarakat Umum">Masyarakat Umum</option>
-                    <option value="Perusahaan">Perusahaan / Swasta</option>
-                    <option value="Lainnya">Lainnya</option>
+                    {kategoriAsalList.map((kat, idx) => (
+                      <option key={idx} value={kat}>{kat}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -186,31 +253,69 @@ const PublicKsop = () => {
                 </div>
               </div>
 
+              {/* Conditional Fields based on Dynamic Kategori Asal Configuration */}
+              {checkIsOnlyAddress(formData.kategori_asal) ? (
+                /* Only Show Alamat Lengkap for Masyarakat Umum / Domisili */
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Alamat Lengkap / Domisili <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="alamat"
+                    rows="3"
+                    value={formData.alamat}
+                    onChange={handleChange}
+                    placeholder="Masukkan alamat lengkap / desa / kecamatan domisili Anda"
+                    required
+                    className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
+                  />
+                </div>
+              ) : (
+                /* Show Asal Instansi AND Alamat Detail for Instansi / Perusahaan / Lainnya */
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Asal Instansi / Perusahaan <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="asal_instansi"
+                      value={formData.asal_instansi}
+                      onChange={handleChange}
+                      placeholder="Nama Instansi, Dinas, atau Perusahaan Asal"
+                      required
+                      className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Alamat Lengkap Instansi</label>
+                    <textarea
+                      name="alamat"
+                      rows="2"
+                      value={formData.alamat}
+                      onChange={handleChange}
+                      placeholder="Alamat detail instansi / kantor (opsional)"
+                      className="w-full text-xs font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Lokasi Registrasi (Terdeteksi Otomatis) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Asal Instansi / Alamat <span className="text-red-500">*</span>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Lokasi Registrasi</span>
+                  <span className="text-[10px] text-sky-600 font-semibold bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">Terdeteksi Kamera</span>
                 </label>
                 <input
                   type="text"
-                  name="asal_instansi"
-                  value={formData.asal_instansi}
+                  name="lokasi"
+                  value={formData.lokasi}
                   onChange={handleChange}
-                  placeholder="Nama Instansi atau Kota Asal"
-                  required
-                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
-                />
-              </div>
-
-              {/* Alamat Detail */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Alamat Lengkap</label>
-                <textarea
-                  name="alamat"
-                  rows="2"
-                  value={formData.alamat}
-                  onChange={handleChange}
-                  placeholder="Alamat detail (opsional)"
-                  className="w-full text-xs font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
+                  placeholder="Lokasi otomatis terdeteksi kamera..."
+                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-sky-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-sky-50/50 text-slate-800 shadow-xs focus:bg-white"
                 />
               </div>
 
@@ -260,7 +365,29 @@ const PublicKsop = () => {
                 </div>
 
                 <WebcamCapture
-                  onCapture={(base64) => setFotoBase64(base64)}
+                  onCapture={(base64, loc) => {
+                    setFotoBase64(base64);
+                    const isInvalid = (val) => !val || !val.trim() || val === 'Lokasi Tidak Terdeteksi' || val === 'Mendeteksi Lokasi...';
+                    if (!isInvalid(loc)) {
+                      latestLocationRef.current = loc;
+                      setFormData(prev => ({ ...prev, lokasi: loc }));
+                    } else if (isInvalid(formData.lokasi)) {
+                      const fallback = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
+                      latestLocationRef.current = fallback;
+                      setFormData(prev => ({ ...prev, lokasi: fallback }));
+                    }
+                  }}
+                  onLocationChange={(loc) => {
+                    const isInvalid = (val) => !val || !val.trim() || val === 'Lokasi Tidak Terdeteksi' || val === 'Mendeteksi Lokasi...';
+                    if (!isInvalid(loc)) {
+                      latestLocationRef.current = loc;
+                      setFormData(prev => ({ ...prev, lokasi: loc }));
+                    } else if (isInvalid(formData.lokasi)) {
+                      const fallback = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
+                      latestLocationRef.current = fallback;
+                      setFormData(prev => ({ ...prev, lokasi: fallback }));
+                    }
+                  }}
                   currentPhoto={fotoBase64}
                 />
               </div>
@@ -286,6 +413,32 @@ const PublicKsop = () => {
           </div>
         </form>
       </main>
+
+      {/* Toast Notification Banner */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 animate-bounceIn shadow-2xl transition-all">
+          <div
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${
+              toast.type === 'success'
+                ? 'bg-slate-900 text-emerald-400 border-emerald-500/40 shadow-emerald-900/20'
+                : 'bg-slate-900 text-rose-400 border-rose-500/40 shadow-rose-900/20'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            )}
+            <span className="text-xs font-bold text-slate-100">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Visitor Badge Modal */}
       {showBadgeModal && (
