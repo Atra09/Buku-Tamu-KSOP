@@ -38,6 +38,15 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   };
 
   const user = JSON.parse(localStorage.getItem('sitamu_user') || '{}');
+  const userRole = (user.role || 'admin').toLowerCase();
+
+  // Filter navigation items based on Role (Role 'user' only accesses Dashboard & Daftar Kunjungan)
+  const filteredNavItems = navItems.filter(item => {
+    if (userRole === 'user') {
+      return item.key === 'dashboard' || item.key === 'tamu';
+    }
+    return true; // Admin gets access to all items
+  });
 
   const renderNavLinks = (collapsed = false) => (
     <nav className="p-3 space-y-1.5 flex-1 overflow-y-auto overflow-x-hidden">
@@ -49,7 +58,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
         <div className="my-2 border-t border-slate-800/80" />
       )}
 
-      {navItems.map((item) => {
+      {filteredNavItems.map((item) => {
         const Icon = item.icon;
         const isActive = currentTab === item.key;
         return (
@@ -99,13 +108,16 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
       collapsed ? 'p-3 justify-center' : 'p-4 gap-3'
     }`}>
       <div className={`flex items-center gap-3 truncate ${collapsed ? 'justify-center' : ''}`}>
-        <div className="w-9 h-9 rounded-full bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
-          AD
+        <div className="w-9 h-9 rounded-full bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center font-black text-xs shrink-0 shadow-xs uppercase">
+          {user?.nama ? user.nama.substring(0, 2) : 'US'}
         </div>
         {!collapsed && (
           <div className="flex-1 truncate">
-            <div className="text-xs font-bold text-white truncate">{user.nama || 'Administrator'}</div>
-            <div className="text-[10px] text-slate-500 truncate">@{user.username || 'admin'}</div>
+            <div className="text-xs font-bold text-white truncate">{user.nama || 'Petugas KSOP'}</div>
+            <div className="text-[10px] text-sky-400 font-extrabold tracking-wide uppercase flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+              {userRole}
+            </div>
           </div>
         )}
       </div>

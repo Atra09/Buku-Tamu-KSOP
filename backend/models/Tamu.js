@@ -24,6 +24,14 @@ const Tamu = sequelize.define('Tamu', {
     type: DataTypes.STRING,
     defaultValue: 'Instansi' // Instansi, Masyarakat, Perusahaan, Lainnya
   },
+  kategori_asal_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'master_kategori_asal',
+      key: 'id'
+    }
+  },
   asal_instansi: {
     type: DataTypes.STRING,
     allowNull: false
@@ -44,9 +52,25 @@ const Tamu = sequelize.define('Tamu', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  tujuan_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'master_tujuan',
+      key: 'id'
+    }
+  },
   keperluan: {
     type: DataTypes.STRING,
     allowNull: false
+  },
+  keperluan_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'master_keperluan',
+      key: 'id'
+    }
   },
   foto: {
     type: DataTypes.STRING,

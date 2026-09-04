@@ -1,4 +1,4 @@
-const { Tamu, MasterTujuan, MasterKeperluan } = require('../models');
+const { Tamu, MasterTujuan, MasterKeperluan, MasterKategoriAsal } = require('../models');
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
@@ -157,17 +157,25 @@ exports.createTamu = async (req, res) => {
       ? lokasi.trim() 
       : defaultFallbackLokasi;
 
+    // Resolve FK IDs for MySQL relational integrity
+    const matchedTujuan = await MasterTujuan.findOne({ where: { nama_tujuan: bertemu } });
+    const matchedKeperluan = await MasterKeperluan.findOne({ where: { nama_keperluan: keperluan } });
+    const matchedKategori = await MasterKategoriAsal.findOne({ where: { nama_kategori: kategori_asal } });
+
     const newTamu = await Tamu.create({
       no_reg,
       nama,
       no_telpon: no_telpon || '',
       kategori_asal: kategori_asal || 'Instansi / Dinas',
+      kategori_asal_id: matchedKategori ? matchedKategori.id : null,
       asal_instansi: finalAsalInstansi,
       jenis_kelamin: jenis_kelamin || 'Laki-laki',
       alamat: alamat || '',
       lokasi: finalLokasi,
       bertemu,
+      tujuan_id: matchedTujuan ? matchedTujuan.id : null,
       keperluan,
+      keperluan_id: matchedKeperluan ? matchedKeperluan.id : null,
       foto: fotoPath,
       tanggal,
       jam,

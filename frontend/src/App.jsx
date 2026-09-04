@@ -19,10 +19,28 @@ const CameraRouteCleaner = () => {
   return null;
 };
 
-// Protected Route Component for Admin pages
+// Protected Route Component for any logged in User/Admin
 const ProtectedRoute = ({ children }) => {
   const user = localStorage.getItem('sitamu_user');
   if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+// Route wrapper restricted strictly to Admin role
+const AdminOnlyRoute = ({ children }) => {
+  const userStr = localStorage.getItem('sitamu_user');
+  if (!userStr) {
+    return <Navigate to="/login" replace />;
+  }
+  try {
+    const user = JSON.parse(userStr);
+    const role = (user.role || 'admin').toLowerCase();
+    if (role !== 'admin') {
+      return <Navigate to="/admin" replace />;
+    }
+  } catch (err) {
     return <Navigate to="/login" replace />;
   }
   return children;
@@ -39,7 +57,7 @@ function App() {
         {/* Login Page */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* Admin Dashboard & Management Pages (Protected) */}
+        {/* Admin Dashboard & Management Pages (Protected for User & Admin) */}
         <Route
           path="/admin"
           element={
@@ -56,20 +74,22 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Master Data Pages (Restricted Strictly to Admin Role) */}
         <Route
           path="/admin/tujuan"
           element={
-            <ProtectedRoute>
+            <AdminOnlyRoute>
               <TujuanKunjungan />
-            </ProtectedRoute>
+            </AdminOnlyRoute>
           }
         />
         <Route
           path="/admin/kategori-asal"
           element={
-            <ProtectedRoute>
+            <AdminOnlyRoute>
               <KategoriAsal />
-            </ProtectedRoute>
+            </AdminOnlyRoute>
           }
         />
         {/* Fallback Wildcard Route */}
