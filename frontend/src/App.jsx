@@ -4,6 +4,7 @@ import PublicKsop from './pages/PublicKsop';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DaftarKunjungan from './pages/DaftarKunjungan';
 import TujuanKunjungan from './pages/TujuanKunjungan';
+import KategoriAsal from './pages/KategoriAsal';
 import UserManagement from './pages/UserManagement';
 import ActivityLogPage from './pages/ActivityLogPage';
 import LoginPage from './pages/LoginPage';
