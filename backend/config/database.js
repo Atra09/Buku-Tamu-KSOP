@@ -5,8 +5,8 @@ require('dotenv').config();
 
 const dialect = process.env.DB_DIALECT || 'mysql';
 const dbName = process.env.DB_NAME || 'db_bukutamu';
-const dbUser = process.env.DB_USER || 'root';
-const dbPass = process.env.DB_PASS || '';
+const dbUser = process.env.DB_USER || process.env.DB_USERNAME || 'root';
+const dbPass = process.env.DB_PASS !== undefined ? process.env.DB_PASS : (process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '');
 const dbHost = process.env.DB_HOST || 'localhost';
 const dbPort = process.env.DB_PORT || 3306;
 
@@ -45,14 +45,8 @@ const ensureMySQLDatabaseExists = async () => {
     await connection.end();
     console.log(`Database MySQL '${dbName}' dipastikan siap/terbuat.`);
   } catch (err) {
-    console.warn(`Peringatan: Gagal terhubung ke MySQL (${err.message}). Menggunakan SQLite sebagai database otomatis.`);
-    // Fallback to SQLite
-    const storagePath = path.resolve(__dirname, '..', './database.sqlite');
-    sequelize = new Sequelize({
-      dialect: 'sqlite',
-      storage: storagePath,
-      logging: false
-    });
+    console.error(`Peringatan: Gagal terhubung ke MySQL (${err.message}).`);
+    throw err;
   }
 };
 

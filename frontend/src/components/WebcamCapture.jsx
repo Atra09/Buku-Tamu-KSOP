@@ -18,10 +18,10 @@ export const stopAllGlobalWebcamStreams = () => {
               if (typeof stream.removeTrack === 'function') {
                 stream.removeTrack(track);
               }
-            } catch (e) {}
+            } catch (e) { }
           });
         }
-      } catch (e) {}
+      } catch (e) { }
     });
     window.__ACTIVE_WEBCAM_STREAMS__.clear();
   }
@@ -142,7 +142,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
             if (bdcRes.ok) {
               bdcData = await bdcRes.json();
             }
-          } catch (e) {}
+          } catch (e) { }
 
           // 2. Fetch OpenStreetMap Nominatim API (Zoom 18 for street/building + Zoom 14 for village/subdistrict)
           let nomData = null;
@@ -160,21 +160,21 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
             ]);
             if (nomRes.ok) nomData = await nomRes.json();
             if (nomResVillage && nomResVillage.ok) nomDataVillage = await nomResVillage.json();
-          } catch (e) {}
+          } catch (e) { }
 
           const nomAddress = (nomData && nomData.address) || {};
           const nomAddressVillage = (nomDataVillage && nomDataVillage.address) || {};
 
           let gedung = nomAddress.building ||
-                       nomAddress.office ||
-                       nomAddress.amenity ||
-                       nomAddress.government ||
-                       nomAddress.public_building ||
-                       nomAddress.commercial ||
-                       nomAddress.industrial ||
-                       nomAddress.shop ||
-                       nomAddress.tourism ||
-                       nomAddress.historic || '';
+            nomAddress.office ||
+            nomAddress.amenity ||
+            nomAddress.government ||
+            nomAddress.public_building ||
+            nomAddress.commercial ||
+            nomAddress.industrial ||
+            nomAddress.shop ||
+            nomAddress.tourism ||
+            nomAddress.historic || '';
           if (/^\d+[-\d\s]*$/.test(gedung) || gedung.length < 3) gedung = '';
 
           let jalan = (nomAddress.road || nomAddress.pedestrian || nomAddress.street || '').trim();
@@ -185,16 +185,16 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
           }
 
           let desa = nomAddress.village ||
-                     nomAddress.suburb ||
-                     nomAddress.neighbourhood ||
-                     nomAddress.hamlet ||
-                     nomAddress.quarter ||
-                     nomAddress.residential ||
-                     nomAddressVillage.village ||
-                     nomAddressVillage.suburb ||
-                     nomAddressVillage.neighbourhood ||
-                     nomAddressVillage.hamlet ||
-                     nomAddressVillage.town || '';
+            nomAddress.suburb ||
+            nomAddress.neighbourhood ||
+            nomAddress.hamlet ||
+            nomAddress.quarter ||
+            nomAddress.residential ||
+            nomAddressVillage.village ||
+            nomAddressVillage.suburb ||
+            nomAddressVillage.neighbourhood ||
+            nomAddressVillage.hamlet ||
+            nomAddressVillage.town || '';
 
           if (!desa && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
             const admin = bdcData.localityInfo.administrative;
@@ -311,7 +311,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
           if (typeof streamToKill.removeTrack === 'function') {
             streamToKill.removeTrack(track);
           }
-        } catch (e) {}
+        } catch (e) { }
       });
     } catch (e) {
       console.warn('Error killing tracks:', e);
@@ -328,7 +328,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
         videoRef.current.pause();
         videoRef.current.srcObject = null;
         videoRef.current.load();
-      } catch (e) {}
+      } catch (e) { }
     }
 
     killStreamTracks(activeStream);
@@ -349,8 +349,31 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
     stopAllGlobalWebcamStreams();
 
     try {
+      // Polyfill for mediaDevices and getUserMedia in HTTP / non-secure contexts
+      if (typeof navigator !== 'undefined') {
+        if (!navigator.mediaDevices) {
+          navigator.mediaDevices = {};
+        }
+
+        if (!navigator.mediaDevices.getUserMedia) {
+          const getUserMediaLegacy =
+            navigator.getUserMedia ||
+            navigator.webkitGetUserMedia ||
+            navigator.mozGetUserMedia ||
+            navigator.msGetUserMedia;
+
+          if (getUserMediaLegacy) {
+            navigator.mediaDevices.getUserMedia = function (constraints) {
+              return new Promise((resolve, reject) => {
+                getUserMediaLegacy.call(navigator, constraints, resolve, reject);
+              });
+            };
+          }
+        }
+      }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Browser tidak mendukung akses kamera langsung');
+        throw new Error('Browser memblokir izin kamera otomatis pada HTTP IP. Klik tombol di bawah untuk meminta izin.');
       }
 
       let stream;
@@ -375,7 +398,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
 
       if (videoRef.current && shouldCameraBeOnRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        await videoRef.current.play().catch(() => { });
         if (isMountedRef.current && shouldCameraBeOnRef.current) {
           setIsStreaming(true);
         }
@@ -383,7 +406,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
     } catch (err) {
       if (isMountedRef.current && shouldCameraBeOnRef.current) {
         console.warn('Camera access error:', err);
-        setError('Kamera tidak terdeteksi atau izin ditolak browser.');
+        setError('Kamera belum diizinkan. Klik tombol "Minta Izin Kamera" di bawah.');
         setIsStreaming(false);
       }
     }
@@ -548,11 +571,10 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
             type="button"
             onClick={takeSnapshot}
             disabled={!isStreaming}
-            className={`w-full py-3 px-4 text-white text-xs font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              isStreaming
+            className={`w-full py-3 px-4 text-white text-xs font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer ${isStreaming
                 ? 'bg-sky-500 hover:bg-sky-600 active:scale-[0.98]'
                 : 'bg-slate-300 cursor-not-allowed text-slate-500'
-            }`}
+              }`}
           >
             <Camera className="w-4 h-4" />
             Ambil Foto
