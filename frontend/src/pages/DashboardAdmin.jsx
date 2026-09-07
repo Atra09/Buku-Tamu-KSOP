@@ -117,22 +117,7 @@ const DashboardAdmin = () => {
         </div>
       </div>
 
-      {/* 2. Interactive Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <MonthlyBarChart
-            weeklyStats={stats.weeklyStats || []}
-            monthlyStats={stats.monthlyStats || []}
-          />
-        </div>
-        <div className="lg:col-span-1">
-          <CategoryDoughnutChart
-            categoryStats={stats.categoryStats || []}
-          />
-        </div>
-      </div>
-
-      {/* 3. Quick Recent Guests Widget */}
+      {/* 2. Quick Recent Guests Widget */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -209,6 +194,21 @@ const DashboardAdmin = () => {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* 3. Interactive Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <MonthlyBarChart
+            weeklyStats={stats.weeklyStats || []}
+            monthlyStats={stats.monthlyStats || []}
+          />
+        </div>
+        <div className="lg:col-span-1">
+          <CategoryDoughnutChart
+            categoryStats={stats.categoryStats || []}
+          />
         </div>
       </div>
     </AdminLayout>
