@@ -4,6 +4,7 @@ import { UserCheck, Camera, Send, FileText, CheckCircle2, ShieldCheck, User, Bui
 import Header from '../components/Header';
 import WebcamCapture from '../components/WebcamCapture';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
+import Flash from '../components/flash/flash';
 
 const PublicKsop = () => {
   const [formData, setFormData] = useState({
@@ -41,6 +42,11 @@ const PublicKsop = () => {
 
   useEffect(() => {
     fetchDropdowns();
+    const loginFlash = sessionStorage.getItem('sitamu_login_flash');
+    if (loginFlash) {
+      showToast(loginFlash, 'success');
+      sessionStorage.removeItem('sitamu_login_flash');
+    }
   }, []);
 
   const fetchDropdowns = async () => {
@@ -88,6 +94,16 @@ const PublicKsop = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'no_telpon') {
+      // Hapus semua karakter yang bukan angka (0-9) dan tanda '+'
+      let cleaned = value.replace(/[^0-9+]/g, '');
+      // Pastikan tanda '+' hanya bisa ada di karakter pertama (misal +62)
+      if (cleaned.includes('+')) {
+        cleaned = '+' + cleaned.replace(/\+/g, '');
+      }
+      setFormData(prev => ({ ...prev, [name]: cleaned }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -148,7 +164,14 @@ const PublicKsop = () => {
         foto_base64: fotoBase64
       };
 
-      const res = await axios.post('/api/tamu', payload);
+      const userStr = localStorage.getItem('sitamu_user');
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const headers = {};
+      if (userObj && userObj.nama) {
+        headers['x-user-nama'] = encodeURIComponent(userObj.nama);
+      }
+
+      const res = await axios.post('/api/tamu', payload, { headers });
       if (res.data && res.data.success) {
         const guestData = res.data.data;
         setRegisteredGuest(guestData);
@@ -178,11 +201,11 @@ const PublicKsop = () => {
 
       <main className="w-full px-4 md:px-8 xl:px-12 mt-4 flex-1">
         {/* Seamless Form directly on main background */}
-        <form onSubmit={handleSubmit} className="w-full flex-1 flex flex-col justify-between">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <form onSubmit={handleSubmit} className="w-full">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             
             {/* Inputs Left Column */}
-            <div className="md:col-span-7 space-y-4 bg-white/95 backdrop-blur-md p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5">
+            <div className="md:col-span-7 space-y-3.5 bg-white/95 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5 h-fit">
               <div className="border-b border-sky-100 pb-3 mb-2">
                 <h3 className="font-extrabold text-lg text-slate-800 uppercase tracking-wider flex items-center gap-2">
                   <UserCheck className="w-5 h-5 text-sky-500" />
@@ -190,65 +213,67 @@ const PublicKsop = () => {
                 </h3>
               </div>
 
-              {/* Nama */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Nama Tamu <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="nama"
-                  value={formData.nama}
-                  onChange={handleChange}
-                  placeholder="Masukkan nama lengkap"
-                  required
-                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
-                />
-              </div>
-
-              {/* No Telpon */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">No Telpon / WhatsApp</label>
-                <input
-                  type="text"
-                  name="no_telpon"
-                  value={formData.no_telpon}
-                  onChange={handleChange}
-                  placeholder="Nomor HP / WhatsApp"
-                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
-                />
-              </div>
-
-              {/* Asal Instansi & Kategori */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Row 1: Nama Tamu & Jenis Kelamin (50-50 Width Grid) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Kategori Asal
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
+                    Nama Tamu <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="kategori_asal"
-                    value={formData.kategori_asal}
+                  <input
+                    type="text"
+                    name="nama"
+                    value={formData.nama}
                     onChange={handleChange}
-                    className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
-                  >
-                    {kategoriAsalList.map((kat, idx) => (
-                      <option key={idx} value={kat}>{kat}</option>
-                    ))}
-                  </select>
+                    placeholder="Masukkan nama lengkap"
+                    required
+                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
                     Jenis Kelamin <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="jenis_kelamin"
                     value={formData.jenis_kelamin}
                     onChange={handleChange}
-                    className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
+                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
                   >
                     <option value="Laki-laki">Laki-laki</option>
                     <option value="Perempuan">Perempuan</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: No Telpon & Kategori Asal (50-50 Width Grid) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1">No Telpon / WhatsApp</label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    name="no_telpon"
+                    value={formData.no_telpon}
+                    onChange={handleChange}
+                    placeholder="Nomor HP / WhatsApp (cth: 0812... / +628...)"
+                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
+                    Kategori Asal
+                  </label>
+                  <select
+                    name="kategori_asal"
+                    value={formData.kategori_asal}
+                    onChange={handleChange}
+                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
+                  >
+                    {kategoriAsalList.map((kat, idx) => (
+                      <option key={idx} value={kat}>{kat}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -257,7 +282,7 @@ const PublicKsop = () => {
               {checkIsOnlyAddress(formData.kategori_asal) ? (
                 /* Only Show Alamat Lengkap for Masyarakat Umum / Domisili */
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
                     Alamat Lengkap / Domisili <span className="text-red-500">*</span>
                   </label>
                   <textarea
@@ -267,14 +292,14 @@ const PublicKsop = () => {
                     onChange={handleChange}
                     placeholder="Masukkan alamat lengkap / desa / kecamatan domisili Anda"
                     required
-                    className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
+                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
                   />
                 </div>
               ) : (
                 /* Show Asal Instansi AND Alamat Detail for Instansi / Perusahaan / Lainnya */
                 <>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-[13px] font-bold text-slate-700 mb-1">
                       Asal Instansi / Perusahaan <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -284,44 +309,27 @@ const PublicKsop = () => {
                       onChange={handleChange}
                       placeholder="Nama Instansi, Dinas, atau Perusahaan Asal"
                       required
-                      className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
+                      className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Alamat Lengkap Instansi</label>
+                    <label className="block text-[13px] font-bold text-slate-700 mb-1">Alamat Lengkap Instansi</label>
                     <textarea
                       name="alamat"
                       rows="2"
                       value={formData.alamat}
                       onChange={handleChange}
                       placeholder="Alamat detail instansi / kantor (opsional)"
-                      className="w-full text-xs font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
+                      className="w-full text-[13px] font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
                     />
                   </div>
                 </>
               )}
 
-              {/* Lokasi Registrasi (Terdeteksi Otomatis) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-sky-500" />
-                  <span>Lokasi Registrasi</span>
-                  <span className="text-[10px] text-sky-600 font-semibold bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">Terdeteksi Kamera</span>
-                </label>
-                <input
-                  type="text"
-                  name="lokasi"
-                  value={formData.lokasi}
-                  onChange={handleChange}
-                  placeholder="Lokasi otomatis terdeteksi kamera..."
-                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-sky-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-sky-50/50 text-slate-800 shadow-xs focus:bg-white"
-                />
-              </div>
-
               {/* Bertemu Dropdown */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">
                   Bertemu (Tujuan) <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -329,7 +337,7 @@ const PublicKsop = () => {
                   value={formData.bertemu}
                   onChange={handleChange}
                   required
-                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
+                  className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
                 >
                   {tujuanList.map((t, idx) => (
                     <option key={idx} value={t}>{t}</option>
@@ -339,7 +347,7 @@ const PublicKsop = () => {
 
               {/* Keperluan / Catatan Kunjungan Text Area */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">
                   Keperluan / Catatan Kunjungan <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -349,13 +357,13 @@ const PublicKsop = () => {
                   onChange={handleChange}
                   placeholder="Tuliskan keperluan / catatan kunjungan Anda di sini..."
                   required
-                  className="w-full text-xs font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
+                  className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
                 />
               </div>
             </div>
 
-            {/* Camera Right Column - Full height stretch */}
-            <div className="md:col-span-5 flex flex-col justify-between bg-white/95 backdrop-blur-md p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5">
+            {/* Camera Right Column */}
+            <div className="md:col-span-5 flex flex-col justify-between bg-white/95 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5 h-fit">
               <div className="flex-1 flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-3 border-b border-sky-100 pb-3">
                   <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
@@ -392,7 +400,7 @@ const PublicKsop = () => {
                 />
               </div>
 
-              <div className="mt-4 pt-3 border-t border-sky-100">
+              <div className="mt-2.5 pt-2 border-t border-sky-100">
                 <button
                   type="submit"
                   disabled={loading}
@@ -414,31 +422,8 @@ const PublicKsop = () => {
         </form>
       </main>
 
-      {/* Toast Notification Banner */}
-      {toast && (
-        <div className="fixed top-6 right-6 z-50 animate-bounceIn shadow-2xl transition-all">
-          <div
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${
-              toast.type === 'success'
-                ? 'bg-slate-900 text-emerald-400 border-emerald-500/40 shadow-emerald-900/20'
-                : 'bg-slate-900 text-rose-400 border-rose-500/40 shadow-rose-900/20'
-            }`}
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-            )}
-            <span className="text-xs font-bold text-slate-100">{toast.message}</span>
-            <button
-              onClick={() => setToast(null)}
-              className="ml-2 text-slate-400 hover:text-white cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Flash Notification Toast */}
+      <Flash toast={toast} onClose={() => setToast(null)} />
 
       {/* Visitor Badge Modal */}
       {showBadgeModal && (

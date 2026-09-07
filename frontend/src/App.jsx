@@ -21,6 +21,15 @@ const CameraRouteCleaner = () => {
   return null;
 };
 
+// Public Only Route Component (Redirects to /buku-tamu if already logged in)
+const PublicOnlyRoute = ({ children }) => {
+  const user = localStorage.getItem('sitamu_user');
+  if (user) {
+    return <Navigate to="/buku-tamu" replace />;
+  }
+  return children;
+};
+
 // Protected Route Component for any logged in User/Admin
 const ProtectedRoute = ({ children }) => {
   const user = localStorage.getItem('sitamu_user');
@@ -40,7 +49,7 @@ const AdminOnlyRoute = ({ children }) => {
     const user = JSON.parse(userStr);
     const role = (user.role || 'admin').toLowerCase();
     if (role !== 'admin') {
-      return <Navigate to="/admin" replace />;
+      return <Navigate to="/buku-tamu" replace />;
     }
   } catch (err) {
     return <Navigate to="/login" replace />;
@@ -53,11 +62,43 @@ function App() {
     <Router>
       <CameraRouteCleaner />
       <Routes>
-        {/* Public Guest Registration KSOP View (Public Access) */}
-        <Route path="/" element={<PublicKsop />} />
+        {/* Entry Root Path: Directs to Halaman Buku Tamu if logged in, or /login if unauthenticated */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/buku-tamu" replace />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* Login Page */}
-        <Route path="/login" element={<LoginPage />} />
+        {/* Login Page (Redirects to /buku-tamu if already logged in) */}
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+
+        {/* Public Guest Registration Route (Form Buku Tamu Digital KSOP) */}
+        <Route
+          path="/buku-tamu"
+          element={
+            <ProtectedRoute>
+              <PublicKsop />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/registrasi"
+          element={
+            <ProtectedRoute>
+              <PublicKsop />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Admin Dashboard & Management Pages (Protected for User & Admin) */}
         <Route

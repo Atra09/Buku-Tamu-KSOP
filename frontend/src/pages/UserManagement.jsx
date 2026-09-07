@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminLayout from '../components/AdminLayout';
+import Flash from '../components/flash/flash';
 import { Users, UserPlus, Edit3, Trash2, Shield, User, Key, Check, X, Search } from 'lucide-react';
 
 const UserManagement = () => {
@@ -8,6 +9,16 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Toast state
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  };
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -80,6 +91,7 @@ const UserManagement = () => {
         const res = await axios.put(`/api/users/${editingUser.id}`, formData);
         if (res.data.success) {
           setIsModalOpen(false);
+          showToast(`Akun user "${formData.nama}" (@${formData.username}) berhasil diperbarui`, 'success');
           fetchUsers();
         }
       } else {
@@ -87,6 +99,7 @@ const UserManagement = () => {
         const res = await axios.post('/api/users', formData);
         if (res.data.success) {
           setIsModalOpen(false);
+          showToast(`Berhasil menambahkan akun user baru "${formData.nama}" (@${formData.username})`, 'success');
           fetchUsers();
         }
       }
@@ -99,14 +112,16 @@ const UserManagement = () => {
 
   const handleDelete = async () => {
     if (!deletingUser) return;
+    const deletedUsername = deletingUser.username;
     try {
       const res = await axios.delete(`/api/users/${deletingUser.id}`);
       if (res.data.success) {
         setDeletingUser(null);
+        showToast(`Akun user @${deletedUsername} berhasil dihapus`, 'success');
         fetchUsers();
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal menghapus user');
+      showToast(err.response?.data?.message || 'Gagal menghapus user', 'error');
     }
   };
 
@@ -156,8 +171,8 @@ const UserManagement = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">
+              <thead className="bg-slate-100">
+                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase">
                   <th className="py-4 px-6 text-center w-16">NO</th>
                   <th className="py-4 px-6">NAMA PETUGAS</th>
                   <th className="py-4 px-6">USERNAME</th>
@@ -338,6 +353,9 @@ const UserManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Flash Notification Toast */}
+      <Flash toast={toast} onClose={() => setToast(null)} />
     </AdminLayout>
   );
 };

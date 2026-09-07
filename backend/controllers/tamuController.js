@@ -1,17 +1,35 @@
-const { Tamu, MasterTujuan, MasterKeperluan, MasterKategoriAsal } = require('../models');
+const { Tamu, MasterTujuan, MasterKeperluan, MasterKategoriAsal, ActivityLog } = require('../models');
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 
-// Helper to generate registration number e.g. REG-20260902-0001
+// Helper to generate registration number e.g. REG-20260907-0001 (Unique & Incremental)
 const generateNoReg = async () => {
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const countToday = await Tamu.count({
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${year}${month}${day}`;
+
+  const lastGuest = await Tamu.findOne({
     where: {
-      tanggal: new Date().toISOString().slice(0, 10)
-    }
+      no_reg: { [Op.like]: `REG-${dateStr}-%` }
+    },
+    order: [['id', 'DESC']]
   });
-  const seq = String(countToday + 1).padStart(4, '0');
+
+  let seqNum = 1;
+  if (lastGuest && lastGuest.no_reg) {
+    const parts = lastGuest.no_reg.split('-');
+    if (parts.length === 3) {
+      const lastSeq = parseInt(parts[2], 10);
+      if (!isNaN(lastSeq)) {
+        seqNum = lastSeq + 1;
+      }
+    }
+  }
+
+  const seq = String(seqNum).padStart(2, '0');
   return `REG-${dateStr}-${seq}`;
 };
 
@@ -137,7 +155,15 @@ exports.createTamu = async (req, res) => {
         }
         
         const buffer = Buffer.from(base64Data, 'base64');
-        const fileName = `foto_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        
+        const fileName = `${yy}-${mm}-${dd}_${hh}.${min}.${ss}.jpg`;
         const uploadDir = path.resolve(__dirname, '../public/uploads');
 
         if (!fs.existsSync(uploadDir)) {
@@ -182,6 +208,25 @@ exports.createTamu = async (req, res) => {
       status: 'Berkunjung'
     });
 
+    // Record Activity Log
+    try {
+      let actorNama = 'Sistem (Publik)';
+      if (req.user && req.user.nama) {
+        actorNama = req.user.nama;
+      } else if (req.headers['x-user-nama']) {
+        actorNama = decodeURIComponent(req.headers['x-user-nama']);
+      }
+
+      await ActivityLog.create({
+        user_nama: actorNama,
+        user_id: req.user ? req.user.id : null,
+        action: 'REGISTRASI_TAMU',
+        details: `Pendaftaran tamu baru: ${nama} (${finalAsalInstansi}) - Tujuan: ${bertemu}`
+      });
+    } catch (logErr) {
+      console.error('Error logging registrasi tamu:', logErr);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Registrasi tamu berhasil!',
@@ -218,6 +263,25 @@ exports.updateStatus = async (req, res) => {
 
     await tamu.save();
 
+    // Record Activity Log
+    try {
+      let actorNama = 'Admin';
+      if (req.user && req.user.nama) {
+        actorNama = req.user.nama;
+      } else if (req.headers['x-user-nama']) {
+        actorNama = decodeURIComponent(req.headers['x-user-nama']);
+      }
+
+      await ActivityLog.create({
+        user_nama: actorNama,
+        user_id: req.user ? req.user.id : null,
+        action: 'UPDATE_STATUS_TAMU',
+        details: `Mengubah status kunjungan ${tamu.nama} (${tamu.no_reg}) menjadi ${nextStatus}`
+      });
+    } catch (logErr) {
+      console.error('Error logging update status tamu:', logErr);
+    }
+
     res.json({ success: true, message: 'Status tamu diperbarui', data: tamu });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -233,7 +297,43 @@ exports.deleteTamu = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Data tamu tidak ditemukan' });
     }
 
+    const namaDeleted = tamu.nama;
+    const noRegDeleted = tamu.no_reg;
+    const fotoDeleted = tamu.foto;
+
     await tamu.destroy();
+
+    // Hapus file foto dari folder backend/public/uploads jika ada
+    if (fotoDeleted && typeof fotoDeleted === 'string' && fotoDeleted.startsWith('/uploads/')) {
+      const filePath = path.resolve(__dirname, '../public', fotoDeleted.substring(1));
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (unlinkErr) {
+          console.error('Gagal menghapus file foto fisik:', unlinkErr);
+        }
+      }
+    }
+
+    // Record Activity Log
+    try {
+      let actorNama = 'Admin';
+      if (req.user && req.user.nama) {
+        actorNama = req.user.nama;
+      } else if (req.headers['x-user-nama']) {
+        actorNama = decodeURIComponent(req.headers['x-user-nama']);
+      }
+
+      await ActivityLog.create({
+        user_nama: actorNama,
+        user_id: req.user ? req.user.id : null,
+        action: 'HAPUS_TAMU',
+        details: `Menghapus data kunjungan tamu: ${namaDeleted} (${noRegDeleted})`
+      });
+    } catch (logErr) {
+      console.error('Error logging hapus tamu:', logErr);
+    }
+
     res.json({ success: true, message: 'Data tamu berhasil dihapus' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

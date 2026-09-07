@@ -85,8 +85,8 @@ const ActivityLogPage = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">
+              <thead className="bg-slate-100">
+                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase">
                   <th className="py-4 px-6 text-center w-16">NO</th>
                   <th className="py-4 px-6 w-48">WAKTU & TANGGAL</th>
                   <th className="py-4 px-6 w-48">AKTOR / PENGGUNA</th>

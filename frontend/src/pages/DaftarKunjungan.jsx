@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
+import Flash from '../components/flash/flash';
 import { exportTamuToExcel } from '../utils/excelExport';
 
 const DaftarKunjungan = () => {
@@ -20,7 +21,7 @@ const DaftarKunjungan = () => {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
 
   // Modals state
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -300,7 +301,7 @@ const DaftarKunjungan = () => {
 
         {/* Table Card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto max-h-[280px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-50">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 z-10 bg-slate-100 shadow-xs">
                 <tr className="bg-slate-100 text-slate-600 uppercase font-bold border-b border-slate-200">
@@ -654,31 +655,6 @@ const DaftarKunjungan = () => {
         </div>
       )}
 
-      {/* Toast Notification Banner */}
-      {toast && (
-        <div className="fixed top-6 right-6 z-50 animate-bounceIn shadow-2xl transition-all">
-          <div
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${
-              toast.type === 'success'
-                ? 'bg-slate-900 text-emerald-400 border-emerald-500/40 shadow-emerald-900/20'
-                : 'bg-slate-900 text-rose-400 border-rose-500/40 shadow-rose-900/20'
-            }`}
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-            )}
-            <span className="text-xs font-bold text-slate-100">{toast.message}</span>
-            <button
-              onClick={() => setToast(null)}
-              className="ml-2 text-slate-400 hover:text-white cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Visitor Badge / Struk Modal */}
       {selectedGuestForBadge && (
@@ -793,6 +769,9 @@ const DaftarKunjungan = () => {
           </div>
         </div>
       )}
+
+      {/* Flash Notification Toast */}
+      <Flash toast={toast} onClose={() => setToast(null)} />
     </AdminLayout>
   );
 };

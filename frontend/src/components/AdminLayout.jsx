@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import Flash from './flash/flash';
 import {
   LayoutDashboard, ClipboardList, Building, Layers, Users, History, ExternalLink, LogOut,
   ChevronLeft, ChevronRight, Menu, X
@@ -20,6 +21,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
 
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('sitamu_sidebar_collapsed') === 'true');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('sitamu_sidebar_collapsed', isCollapsed);
@@ -28,6 +30,14 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const loginFlash = sessionStorage.getItem('sitamu_login_flash');
+    if (loginFlash) {
+      setToast({ message: loginFlash, type: 'success' });
+      sessionStorage.removeItem('sitamu_login_flash');
+    }
+  }, []);
 
   const currentTab = activeTab || (
     location.pathname === '/admin/tamu' ? 'tamu' :
@@ -92,15 +102,15 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
       )}
 
       <Link
-        to="/"
-        title={collapsed ? 'Buka Halaman KSOP' : undefined}
+        to="/buku-tamu"
+        title={collapsed ? 'Buka Form Registrasi Buku Tamu KSOP' : undefined}
         onClick={() => setIsMobileOpen(false)}
         className={`w-full flex items-center rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-900 hover:text-white transition-all ${
           collapsed ? 'justify-center p-3' : 'px-4 py-3 gap-3'
         }`}
       >
         <ExternalLink className="w-4 h-4 text-sky-400 shrink-0" />
-        {!collapsed && <span className="truncate">Buka Halaman KSOP</span>}
+        {!collapsed && <span className="truncate">Daftarkan Tamu</span>}
       </Link>
     </nav>
   );
@@ -177,7 +187,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
       }`}>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3.5 top-7 bg-sky-600 hover:bg-sky-500 text-white p-1 rounded-full border-2 border-slate-950 shadow-md transition-transform hover:scale-110 cursor-pointer z-20"
+          className="absolute -right-3.5 top-1/2 -translate-y-1/2 bg-sky-600 hover:bg-sky-500 text-white p-1.5 rounded-full border-2 border-slate-950 shadow-md transition-transform hover:scale-110 cursor-pointer z-20"
           title={isCollapsed ? 'Perluas Sidebar' : 'Ciutkan Sidebar (Tampil Icon Saja)'}
         >
           {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
@@ -209,6 +219,9 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
           {children}
         </div>
       </div>
+
+      {/* Flash Notification Toast */}
+      <Flash toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 };

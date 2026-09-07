@@ -5,6 +5,20 @@ import { useReactToPrint } from 'react-to-print';
 const VisitorBadgeModal = ({ guest, onClose }) => {
   const printRef = useRef(null);
 
+  const formatDisplayNoReg = (noReg) => {
+    if (!noReg) return '';
+    const parts = noReg.split('-');
+    if (parts.length >= 2) {
+      const prefix = parts[0];
+      let datePart = parts[1];
+      if (datePart.length === 8) {
+        datePart = datePart.substring(2);
+      }
+      return `${prefix}-${datePart}`;
+    }
+    return noReg;
+  };
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Struk-Si-Tamu-${guest?.no_reg || 'ID'}`
@@ -61,9 +75,9 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
               </div>
             )}
 
-            {/* No Reg Highlight */}
+            {/* No Reg Highlight (Formatted as REG-YYMMDD for Struk display) */}
             <div className="bg-emerald-600 text-white py-1.5 px-3 rounded-lg font-black text-sm tracking-widest mb-4 shadow-xs">
-              {guest.no_reg}
+              {formatDisplayNoReg(guest.no_reg)}
             </div>
 
             {/* Details Table */}

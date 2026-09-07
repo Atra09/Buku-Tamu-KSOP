@@ -29,9 +29,10 @@ const LoginPage = () => {
         // Save user & token to localStorage
         localStorage.setItem('sitamu_token', res.data.token);
         localStorage.setItem('sitamu_user', JSON.stringify(res.data.user));
+        sessionStorage.setItem('sitamu_login_flash', `Selamat datang, ${res.data.user?.nama || res.data.user?.username || 'User'}!`);
         
-        // Navigate to Halaman Utama Buku Tamu
-        navigate('/');
+        // Navigate to Halaman Utama Buku Tamu Digital KSOP
+        navigate('/buku-tamu');
       } else {
         setError(res.data.message || 'Login gagal, periksa kembali data Anda');
       }

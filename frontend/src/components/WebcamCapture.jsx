@@ -506,14 +506,6 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
                     <Video className="w-3.5 h-3.5" />
                     Coba Kamera Lagi
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Pilih File Foto
-                  </button>
                 </div>
               </div>
             )}
@@ -532,8 +524,8 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
 
         {/* Location Overlay Indicator */}
         {isStreaming && !capturedImage && (
-          <div className="absolute bottom-2 left-2 bg-slate-950/80 backdrop-blur-xs text-sky-300 text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 border border-sky-500/30 shadow-md max-w-[90%] truncate">
-            <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
+          <div className="absolute bottom-2.5 left-2.5 bg-slate-950/85 backdrop-blur-xs text-sky-300 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-sky-500/40 shadow-md max-w-[92%] truncate">
+            <MapPin className="w-3.5 h-3.5 text-sky-400 shrink-0" />
             <span className="truncate">{locationText}</span>
           </div>
         )}
@@ -545,15 +537,6 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
           </div>
         )}
       </div>
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileUpload}
-        className="hidden"
-      />
 
       {/* Action Controls */}
       <div className="w-full mt-3 flex items-center justify-between gap-2">

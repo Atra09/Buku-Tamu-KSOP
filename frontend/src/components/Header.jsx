@@ -50,7 +50,7 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
     navigate('/login');
   };
 
-  const isHome = location.pathname === '/';
+  const isHome = location.pathname === '/buku-tamu' || location.pathname === '/registrasi';
 
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-sky-200/60 shadow-xs sticky top-0 z-50 py-3 px-4 md:px-8 xl:px-12 transition-all">
@@ -112,7 +112,7 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
                   <div>
                     {!isHome ? (
                       <Link
-                        to="/"
+                        to="/buku-tamu"
                         onClick={() => setDropdownOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
                       >
