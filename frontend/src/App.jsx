@@ -8,6 +8,7 @@ import KategoriAsal from './pages/KategoriAsal';
 import UserManagement from './pages/UserManagement';
 import ActivityLogPage from './pages/ActivityLogPage';
 import LoginPage from './pages/LoginPage';
+import ProfilePage from './pages/ProfilePage';
 import { stopAllGlobalWebcamStreams } from './components/WebcamCapture';
 
 // Automatic Hardware Camera Cleanup on Route Navigation
@@ -21,9 +22,64 @@ const CameraRouteCleaner = () => {
   return null;
 };
 
-// Public Only Route Component (Redirects to /buku-tamu if already logged in)
+// Error Boundary Component to prevent White Screen of Death
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Uncaught error in React Component Tree:', error, errorInfo);
+  }
+
+  handleReset = () => {
+    localStorage.removeItem('sitamu_user');
+    localStorage.removeItem('sitamu_token');
+    window.location.href = '/login';
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center font-sans">
+          <div className="max-w-md bg-slate-800 border border-slate-700 p-8 rounded-3xl shadow-2xl space-y-4">
+            <div className="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-2xl font-black">
+              !
+            </div>
+            <h1 className="text-xl font-black text-white">Terjadi Kesalahan Sesi</h1>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Terdapat kendala data sesi browser. Klik tombol di bawah ini untuk mereset dan memuat ulang halaman.
+            </p>
+            <button
+              onClick={this.handleReset}
+              className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg cursor-pointer"
+            >
+              Reset Sesi & Muat Ulang Halaman
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Public Only Route Component (Redirects to /admin if already logged in)
 const PublicOnlyRoute = ({ children }) => {
-  const user = localStorage.getItem('sitamu_user');
+  let user = null;
+  try {
+    const rawUser = localStorage.getItem('sitamu_user');
+    if (rawUser && rawUser !== 'undefined') {
+      user = JSON.parse(rawUser);
+    }
+  } catch (e) {
+    user = null;
+  }
   if (user) {
     return <Navigate to="/buku-tamu" replace />;
   }
@@ -32,7 +88,15 @@ const PublicOnlyRoute = ({ children }) => {
 
 // Protected Route Component for any logged in User/Admin
 const ProtectedRoute = ({ children }) => {
-  const user = localStorage.getItem('sitamu_user');
+  let user = null;
+  try {
+    const rawUser = localStorage.getItem('sitamu_user');
+    if (rawUser && rawUser !== 'undefined') {
+      user = JSON.parse(rawUser);
+    }
+  } catch (e) {
+    user = null;
+  }
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -41,28 +105,32 @@ const ProtectedRoute = ({ children }) => {
 
 // Route wrapper restricted strictly to Admin role
 const AdminOnlyRoute = ({ children }) => {
-  const userStr = localStorage.getItem('sitamu_user');
-  if (!userStr) {
+  let user = null;
+  try {
+    const rawUser = localStorage.getItem('sitamu_user');
+    if (rawUser && rawUser !== 'undefined') {
+      user = JSON.parse(rawUser);
+    }
+  } catch (e) {
+    user = null;
+  }
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
-  try {
-    const user = JSON.parse(userStr);
-    const role = (user.role || 'admin').toLowerCase();
-    if (role !== 'admin') {
-      return <Navigate to="/buku-tamu" replace />;
-    }
-  } catch (err) {
-    return <Navigate to="/login" replace />;
+  const role = (user.role || 'admin').toLowerCase();
+  if (role && role !== 'admin' && role !== 'superadmin' && role !== 'administrator') {
+    return <Navigate to="/buku-tamu" replace />;
   }
   return children;
 };
 
 function App() {
   return (
-    <Router>
-      <CameraRouteCleaner />
-      <Routes>
-        {/* Entry Root Path: Directs to Halaman Buku Tamu if logged in, or /login if unauthenticated */}
+    <ErrorBoundary>
+      <Router>
+        <CameraRouteCleaner />
+        <Routes>
+        {/* Entry Root Path: Directs to /buku-tamu if logged in, or /login if unauthenticated */}
         <Route
           path="/"
           element={
@@ -117,44 +185,51 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-        {/* Master Data Pages (Restricted Strictly to Admin Role) */}
         <Route
           path="/admin/tujuan"
           element={
-            <AdminOnlyRoute>
+            <ProtectedRoute>
               <TujuanKunjungan />
-            </AdminOnlyRoute>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/kategori-asal"
           element={
-            <AdminOnlyRoute>
+            <ProtectedRoute>
               <KategoriAsal />
-            </AdminOnlyRoute>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/users"
           element={
-            <AdminOnlyRoute>
+            <ProtectedRoute>
               <UserManagement />
-            </AdminOnlyRoute>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/admin/log-aktivitas"
           element={
-            <AdminOnlyRoute>
+            <ProtectedRoute>
               <ActivityLogPage />
-            </AdminOnlyRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
           }
         />
         {/* Fallback Wildcard Route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
+  </ErrorBoundary>
   );
 }
 

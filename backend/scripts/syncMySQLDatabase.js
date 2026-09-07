@@ -1,9 +1,17 @@
-const { sequelize, Tamu, MasterTujuan, MasterKeperluan, MasterKategoriAsal, User, seedInitialData } = require('../models');
+const { sequelize, Tamu, MasterTujuan, MasterKategoriAsal, User, seedInitialData } = require('../models');
 
 const syncAndLinkDB = async () => {
   try {
     console.log('🔄 Memulai sinkronisasi tabel & FK constraint pada MySQL (db_bukutamu)...');
     
+    // Drop obsolete master_keperluan table if exists
+    try {
+      await sequelize.query('DROP TABLE IF EXISTS `master_keperluan`;');
+      console.log('🗑️ Tabel master_keperluan berhasil dibuang (Keperluan 100% menggunakan kolom VARCHAR direct).');
+    } catch (e) {
+      // Ignore if table doesn't exist
+    }
+
     // 1. Sync all models with ALTER TRUE to ensure PK & FK columns exist
     await sequelize.sync({ alter: true });
     console.log('✅ Sequelize sync alter true berhasil.');
@@ -14,7 +22,6 @@ const syncAndLinkDB = async () => {
     // 3. Link existing Tamu records with Master IDs if null
     const allTamu = await Tamu.findAll();
     const allTujuan = await MasterTujuan.findAll();
-    const allKeperluan = await MasterKeperluan.findAll();
     const allKategori = await MasterKategoriAsal.findAll();
 
     for (const t of allTamu) {
@@ -25,15 +32,6 @@ const syncAndLinkDB = async () => {
         const matchedTujuan = allTujuan.find(m => m.nama_tujuan.toLowerCase() === t.bertemu.toLowerCase());
         if (matchedTujuan) {
           t.tujuan_id = matchedTujuan.id;
-          updated = true;
-        }
-      }
-
-      // Link keperluan_id
-      if (!t.keperluan_id && t.keperluan) {
-        const matchedKeperluan = allKeperluan.find(m => m.nama_keperluan.toLowerCase() === t.keperluan.toLowerCase());
-        if (matchedKeperluan) {
-          t.keperluan_id = matchedKeperluan.id;
           updated = true;
         }
       }
@@ -52,7 +50,7 @@ const syncAndLinkDB = async () => {
       }
     }
 
-    console.log('🎉 Relasi Foreign Key (FK) MySQL antara tabel tamu dan master data (tujuan, keperluan, kategori_asal) 100% TERHUBUNG!');
+    console.log('🎉 Relasi Foreign Key (FK) MySQL antara tabel tamu dan master data (tujuan, kategori_asal) 100% TERHUBUNG!');
     process.exit(0);
   } catch (err) {
     console.error('❌ Gagal sinkronisasi FK MySQL:', err);

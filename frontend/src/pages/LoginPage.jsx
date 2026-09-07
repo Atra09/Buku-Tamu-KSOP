@@ -31,7 +31,7 @@ const LoginPage = () => {
         localStorage.setItem('sitamu_user', JSON.stringify(res.data.user));
         sessionStorage.setItem('sitamu_login_flash', `Selamat datang, ${res.data.user?.nama || res.data.user?.username || 'User'}!`);
         
-        // Navigate to Halaman Utama Buku Tamu Digital KSOP
+        // Navigate to Guest Registration Form (/buku-tamu)
         navigate('/buku-tamu');
       } else {
         setError(res.data.message || 'Login gagal, periksa kembali data Anda');
@@ -76,8 +76,8 @@ const LoginPage = () => {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               KSOP Si-Tamu
             </h1>
-            <p className="text-xs text-slate-500 font-semibold mt-1">
-              Sistem Informasi Buku Tamu Digital
+            <p className="text-xs text-slate-500 font-bold mt-1">
+              Sistem Informasi Registrasi & Manajemen Tamu
             </p>
           </div>
 

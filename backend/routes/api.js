@@ -10,10 +10,6 @@ const authController = require('../controllers/authController');
 const userController = require('../controllers/userController');
 const activityController = require('../controllers/activityController');
 
-// Auth Routes
-router.post('/auth/login', authController.login);
-router.get('/auth/me', authController.getProfile);
-
 // Multer storage configuration for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -38,6 +34,11 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Auth Routes
+router.post('/auth/login', authController.login);
+router.get('/auth/me', authController.getProfile);
+router.put('/auth/profile', upload.single('foto'), authController.updateProfile);
+
 // Tamu Routes
 router.get('/tamu', tamuController.getAllTamu);
 router.get('/tamu/stats', tamuController.getStats);
@@ -51,7 +52,6 @@ router.get('/master/dropdowns', masterController.getDropdownData);
 router.post('/master/tujuan', masterController.addTujuan);
 router.put('/master/tujuan/:id', masterController.updateTujuan);
 router.delete('/master/tujuan/:id', masterController.deleteTujuan);
-router.post('/master/keperluan', masterController.addKeperluan);
 router.post('/master/kategori-asal', masterController.addKategoriAsal);
 router.put('/master/kategori-asal/:id', masterController.updateKategoriAsal);
 router.delete('/master/kategori-asal/:id', masterController.deleteKategoriAsal);
@@ -64,5 +64,6 @@ router.delete('/users/:id', userController.deleteUser);
 
 // Activity Log Routes
 router.get('/logs', activityController.getActivityLogs);
+router.post('/logs', activityController.createLog);
 
 module.exports = router;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Search, Calendar, Printer, Trash2, Eye, X, User, MapPin, AlertTriangle, CheckCircle2, AlertCircle, FileSpreadsheet, Download
+  Search, Calendar, Printer, Trash2, Eye, X, User, MapPin, AlertTriangle, CheckCircle2, AlertCircle, FileSpreadsheet, Download, ExternalLink
 } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
@@ -27,6 +27,8 @@ const DaftarKunjungan = () => {
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [selectedGuestForBadge, setSelectedGuestForBadge] = useState(null);
   const [detailGuest, setDetailGuest] = useState(null);
+  const [selectedLocationMap, setSelectedLocationMap] = useState(null);
+  const [mapViewMode, setMapViewMode] = useState('k'); // 'k' = Satelit (Satellite), 'm' = Peta Jalan (Map)
   const [guestToDelete, setGuestToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -144,6 +146,23 @@ const DaftarKunjungan = () => {
   const TAHUN_OPTIONS = ['2024', '2025', '2026', '2027', '2028'];
 
   // Helper functions for Excel Export
+  const logExcelExportActivity = (details) => {
+    try {
+      const userStr = localStorage.getItem('sitamu_user');
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const headers = {};
+      if (userObj && userObj.nama) {
+        headers['x-user-nama'] = encodeURIComponent(userObj.nama);
+      }
+      axios.post('/api/logs', {
+        action: 'EKSPOR_EXCEL',
+        details
+      }, { headers }).catch(err => console.error('Error logging export activity:', err));
+    } catch (e) {
+      console.error('Error in log excel export:', e);
+    }
+  };
+
   const fetchAllTamuDataForExport = async () => {
     try {
       const res = await axios.get('/api/tamu', { params: { limit: 1000 } });
@@ -166,6 +185,7 @@ const DaftarKunjungan = () => {
     const filtered = allData.filter(g => g.tanggal && g.tanggal >= dateLimitStr);
     const success = exportTamuToExcel(filtered, 'Laporan Kunjungan Tamu Mingguan', 'Laporan_Kunjungan_Mingguan');
     if (success) {
+      logExcelExportActivity(`Mengunduh Laporan Rekapitulasi Data Tamu Mingguan (${filtered.length} Tamu)`);
       showToast(`Berhasil mengeksport ${filtered.length} data kunjungan mingguan!`, 'success');
       setShowExportModal(false);
     }
@@ -188,6 +208,7 @@ const DaftarKunjungan = () => {
     const fileNamePrefix = `Laporan_Kunjungan_${monthLabel}_${exportYear}`;
     const success = exportTamuToExcel(filtered, reportTitle, fileNamePrefix);
     if (success) {
+      logExcelExportActivity(`Mengunduh Laporan Rekapitulasi Data Tamu Periode ${monthLabel} ${exportYear} (${filtered.length} Tamu)`);
       showToast(`Berhasil mengeksport ${filtered.length} data kunjungan (${monthLabel} ${exportYear})!`, 'success');
       setShowExportModal(false);
     }
@@ -196,6 +217,7 @@ const DaftarKunjungan = () => {
   const handleExportCurrent = () => {
     const success = exportTamuToExcel(tamuList, 'Laporan Kunjungan Tamu Filtered', 'Laporan_Kunjungan_Filtered');
     if (success) {
+      logExcelExportActivity(`Mengunduh Laporan Rekapitulasi Data Tamu Sesuai Filter (${tamuList.length} Tamu)`);
       showToast(`Berhasil mengeksport ${tamuList.length} data kunjungan!`, 'success');
       setShowExportModal(false);
     }
@@ -357,11 +379,16 @@ const DaftarKunjungan = () => {
                       </td>
 
                       {/* Lokasi Registrasi */}
-                      <td className="p-3 max-w-[160px]">
-                        <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 truncate" title={g.lokasi || 'Lokasi Tidak Terdeteksi'}>
-                          <MapPin className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                      <td className="p-3 max-w-[170px]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLocationMap(g)}
+                          className="flex items-center gap-1.5 text-[11px] font-bold text-sky-700 hover:text-sky-900 bg-sky-50/80 hover:bg-sky-100 p-1.5 rounded-xl border border-sky-200/80 transition-all cursor-pointer group w-full text-left truncate shadow-2xs"
+                          title="Klik untuk melihat Peta Lokasi Registrasi"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-sky-600 shrink-0 group-hover:scale-110 transition-transform" />
                           <span className="truncate">{g.lokasi || 'Lokasi Tidak Terdeteksi'}</span>
-                        </div>
+                        </button>
                       </td>
 
                       {/* Bertemu */}
@@ -598,17 +625,29 @@ const DaftarKunjungan = () => {
               </div>
 
               {/* Lokasi Deteksi Foto / Registrasi */}
-              <div className="bg-slate-900 text-slate-100 p-3 rounded-xl border border-slate-800 flex items-start gap-2.5 shadow-sm">
-                <MapPin className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-sky-400 block">
-                    Lokasi Registrasi / Foto
-                  </span>
-                  <span className="text-xs font-semibold text-slate-200 block mt-0.5">
-                    {detailGuest.lokasi || 'Lokasi Tidak Terdeteksi'}
-                  </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const gMap = detailGuest;
+                  setDetailGuest(null);
+                  setSelectedLocationMap(gMap);
+                }}
+                className="w-full bg-slate-900 hover:bg-slate-950 text-slate-100 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-left shadow-sm transition-all cursor-pointer group"
+                title="Klik untuk memperbesar Peta Lokasi"
+              >
+                <div className="flex items-start gap-2.5">
+                  <MapPin className="w-4 h-4 text-sky-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-sky-400 block">
+                      Lokasi Registrasi / Foto (Klik untuk Peta)
+                    </span>
+                    <span className="text-xs font-semibold text-slate-200 block mt-0.5">
+                      {detailGuest.lokasi || 'Lokasi Tidak Terdeteksi'}
+                    </span>
+                  </div>
                 </div>
-              </div>
+                <ExternalLink className="w-4 h-4 text-sky-400 opacity-70 group-hover:opacity-100 transition-opacity" />
+              </button>
             </div>
             <div className="bg-slate-100 px-5 py-3 text-right">
               <button
@@ -621,6 +660,152 @@ const DaftarKunjungan = () => {
           </div>
         </div>
       )}
+
+      {/* Interactive Map Modal Popup */}
+      {selectedLocationMap && (() => {
+        const rawLoc = selectedLocationMap.lokasi || '';
+        const isNotDetected = !rawLoc || rawLoc === 'Lokasi Tidak Terdeteksi';
+        
+        // Extract exact coordinates if available (e.g. -7.043512, 113.882145), otherwise use full string
+        let mapQuery = 'Kalianget, Sumenep';
+        if (!isNotDetected) {
+          const coordMatch = rawLoc.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+          if (coordMatch) {
+            mapQuery = `${coordMatch[1]},${coordMatch[2]}`;
+          } else {
+            mapQuery = rawLoc;
+          }
+        }
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xs animate-fadeIn">
+            <div className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-200 space-y-0 transform transition-all">
+              
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 p-4 px-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 border border-sky-400/30 flex items-center justify-center font-bold shadow-inner shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-base tracking-wide text-white">Peta Lokasi Presensi Tamu (Real-Time GPS)</h3>
+                      <span className="bg-sky-500/20 text-sky-300 font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-sky-500/30">
+                        {selectedLocationMap.no_reg}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 font-medium mt-0.5">
+                      Pengunjung: <strong className="text-white">{selectedLocationMap.nama}</strong> ({selectedLocationMap.asal_instansi})
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  {/* Toggle Map View Mode (Satelit vs Peta Jalan) */}
+                  <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700 flex items-center gap-1 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setMapViewMode('k')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        mapViewMode === 'k'
+                          ? 'bg-sky-500 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                      title="Tampilan Foto Satelit / Udara"
+                    >
+                      📡 Satelit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapViewMode('m')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        mapViewMode === 'm'
+                          ? 'bg-sky-500 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                      title="Tampilan Peta Vektor Jalan"
+                    >
+                      🗺️ Jalan
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedLocationMap(null)}
+                    className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Tutup Peta"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body: Spacious Interactive Map iframe */}
+              <div className="relative w-full bg-slate-900 h-[380px] sm:h-[430px]">
+                {!isNotDetected ? (
+                  <iframe
+                    title="Maps Preview Presensi Tamu"
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    scrolling="no"
+                    marginHeight="0"
+                    marginWidth="0"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=${mapViewMode}&z=16&ie=UTF8&iwloc=&output=embed`}
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                  ></iframe>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 space-y-2 p-6 text-center">
+                    <MapPin className="w-12 h-12 text-slate-300 animate-bounce" />
+                    <p className="font-extrabold text-sm text-slate-200">Alamat Lokasi Tidak Terdeteksi</p>
+                    <p className="text-xs text-slate-400 max-w-sm">Tamu mendaftar tanpa izin akses lokasi GPS pada perangkatnya.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer: Address details & Google Maps Link */}
+              <div className="bg-slate-50 p-4 px-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-start gap-3 text-xs flex-1">
+                  <MapPin className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+                      Titik Presensi Terdeteksi Perangkat:
+                    </span>
+                    <p className="font-bold text-slate-800 text-xs mt-0.5 leading-relaxed">
+                      {rawLoc || 'Lokasi Tidak Terdeteksi'}
+                    </p>
+                    <span className="text-[11px] font-medium text-slate-500 block mt-1">
+                      Waktu Registrasi: <strong className="text-slate-700">{selectedLocationMap.tanggal} jam {selectedLocationMap.jam} WIB</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                  {!isNotDetected && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 sm:flex-none px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-sky-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer border border-sky-500"
+                    >
+                      <ExternalLink className="w-4 h-4 text-sky-100" />
+                      <span>Buka Navigasi Google Maps</span>
+                    </a>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedLocationMap(null)}
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Custom Delete Confirmation Modal */}
       {guestToDelete && (

@@ -31,3 +31,31 @@ exports.getActivityLogs = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// POST /api/logs - Record client-side activity (e.g. print badge, download report)
+exports.createLog = async (req, res) => {
+  try {
+    const { action, details } = req.body;
+    if (!action) return res.status(400).json({ success: false, message: 'Aksi wajib diisi' });
+
+    let actorNama = 'Administrator';
+    let user_id = null;
+    if (req.user) {
+      actorNama = req.user.nama || req.user.username || 'Admin';
+      user_id = req.user.id || null;
+    } else if (req.headers['x-user-nama']) {
+      actorNama = decodeURIComponent(req.headers['x-user-nama']);
+    }
+
+    const newLog = await ActivityLog.create({
+      user_nama: actorNama,
+      user_id,
+      action,
+      details: details || '-'
+    });
+
+    res.status(201).json({ success: true, data: newLog });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

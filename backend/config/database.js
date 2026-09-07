@@ -42,6 +42,12 @@ const ensureMySQLDatabaseExists = async () => {
       password: dbPass
     });
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;`);
+    await connection.query(`USE \`${dbName}\`;`);
+    try {
+      await connection.query(`ALTER TABLE \`users\` MODIFY COLUMN \`role\` VARCHAR(255) DEFAULT 'user';`);
+    } catch (e) {
+      // Table may not exist yet on initial run
+    }
     await connection.end();
     console.log(`Database MySQL '${dbName}' dipastikan siap/terbuat.`);
   } catch (err) {

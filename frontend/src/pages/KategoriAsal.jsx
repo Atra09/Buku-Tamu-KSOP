@@ -38,6 +38,16 @@ const KategoriAsal = () => {
     }
   };
 
+  const getAuthHeaders = () => {
+    const userStr = localStorage.getItem('sitamu_user');
+    const userObj = userStr ? JSON.parse(userStr) : null;
+    const headers = {};
+    if (userObj && userObj.nama) {
+      headers['x-user-nama'] = encodeURIComponent(userObj.nama);
+    }
+    return { headers };
+  };
+
   const handleAddOrUpdateMaster = async (e) => {
     e.preventDefault();
     if (!newKategori.trim()) return;
@@ -47,11 +57,12 @@ const KategoriAsal = () => {
         nama_kategori: newKategori.trim(),
         butuh_instansi: butuhInstansi
       };
+      const config = getAuthHeaders();
       if (editingId) {
-        await axios.put(`/api/master/kategori-asal/${editingId}`, payload);
+        await axios.put(`/api/master/kategori-asal/${editingId}`, payload, config);
         showToast('Perubahan kategori asal berhasil disimpan!', 'success');
       } else {
-        await axios.post('/api/master/kategori-asal', payload);
+        await axios.post('/api/master/kategori-asal', payload, config);
         showToast('Kategori asal baru berhasil ditambahkan!', 'success');
       }
       setNewKategori('');
@@ -82,7 +93,8 @@ const KategoriAsal = () => {
     if (!itemToDelete) return;
     setDeleting(true);
     try {
-      await axios.delete(`/api/master/kategori-asal/${itemToDelete.id}`);
+      const config = getAuthHeaders();
+      await axios.delete(`/api/master/kategori-asal/${itemToDelete.id}`, config);
       setItemToDelete(null);
       showToast(`Kategori "${itemToDelete.nama_kategori}" berhasil dihapus`, 'success');
       fetchMasterData();

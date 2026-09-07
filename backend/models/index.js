@@ -1,7 +1,6 @@
 const { sequelize } = require('../config/database');
 const Tamu = require('./Tamu');
 const MasterTujuan = require('./MasterTujuan');
-const MasterKeperluan = require('./MasterKeperluan');
 const MasterKategoriAsal = require('./MasterKategoriAsal');
 const User = require('./User');
 const ActivityLog = require('./ActivityLog');
@@ -9,9 +8,6 @@ const ActivityLog = require('./ActivityLog');
 // Foreign Key Associations for Relational MySQL ERD Diagram
 MasterTujuan.hasMany(Tamu, { foreignKey: 'tujuan_id' });
 Tamu.belongsTo(MasterTujuan, { foreignKey: 'tujuan_id' });
-
-MasterKeperluan.hasMany(Tamu, { foreignKey: 'keperluan_id' });
-Tamu.belongsTo(MasterKeperluan, { foreignKey: 'keperluan_id' });
 
 MasterKategoriAsal.hasMany(Tamu, { foreignKey: 'kategori_asal_id' });
 Tamu.belongsTo(MasterKategoriAsal, { foreignKey: 'kategori_asal_id' });
@@ -47,19 +43,6 @@ const seedInitialData = async () => {
         { nama_tujuan: 'Petugas Pelayanan / Front Office' }
       ]);
       console.log('Seeded Master Tujuan');
-    }
-
-    const keperluanCount = await MasterKeperluan.count();
-    if (keperluanCount === 0) {
-      await MasterKeperluan.bulkCreate([
-        { nama_keperluan: 'Konsultasi Perizinan / Dokumen' },
-        { nama_keperluan: 'Pengurusan Surat Clearance' },
-        { nama_keperluan: 'Permohonan Sertifikat' },
-        { nama_keperluan: 'Kunjungan Kerja / Audien' },
-        { nama_keperluan: 'Penyerahan Surat / Berkas' },
-        { nama_keperluan: 'Lainnya' }
-      ]);
-      console.log('Seeded Master Keperluan');
     }
 
     const kategoriAsalCount = await MasterKategoriAsal.count();
@@ -104,7 +87,6 @@ module.exports = {
   sequelize,
   Tamu,
   MasterTujuan,
-  MasterKeperluan,
   MasterKategoriAsal,
   User,
   ActivityLog,

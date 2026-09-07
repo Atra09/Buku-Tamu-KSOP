@@ -189,12 +189,14 @@ const UserManagement = () => {
                     <td className="py-4 px-6 font-mono text-slate-600">@{u.username}</td>
                     <td className="py-4 px-6 text-center">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase ${
-                        u.role === 'admin'
+                        u.role === 'admin' || u.role === 'superuser' || u.role === 'super user'
                           ? 'bg-rose-50 text-rose-600 border border-rose-200/60'
+                          : u.role === 'koordinator'
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
                           : 'bg-sky-50 text-sky-600 border border-sky-200/60'
                       }`}>
                         <Shield className="w-3 h-3" />
-                        {u.role}
+                        {u.role === 'admin' ? 'SUPER USER' : u.role.toUpperCase()}
                       </span>
                     </td>
                     <td className="py-4 px-6 text-slate-500">
@@ -300,7 +302,8 @@ const UserManagement = () => {
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-bold"
                 >
                   <option value="user">USER (Akses Dashboard & Daftar Kunjungan)</option>
-                  <option value="admin">ADMIN (Akses Penuh Semua Modul & Master Data)</option>
+                  <option value="koordinator">KOORDINATOR (Akses Dashboard, Daftar Kunjungan, Master Data & Log Aktivitas)</option>
+                  <option value="admin">SUPER USER (Akses Penuh Semua Modul & Kelola User)</option>
                 </select>
               </div>
 

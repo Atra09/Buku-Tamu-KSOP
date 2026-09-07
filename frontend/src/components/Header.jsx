@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Building2, Clock, Calendar, LayoutDashboard, UserCheck, ChevronDown, LogOut, User } from 'lucide-react';
+import UserProfileModal from './UserProfileModal';
 
 const Header = ({ companyName = "KSOP Si-Tamu" }) => {
   const [dateTime, setDateTime] = useState(new Date());
   const [user, setUser] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -72,8 +74,8 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
             <h1 className="text-xl md:text-2xl font-black text-sky-950 tracking-tight flex items-center gap-2">
               {companyName}
             </h1>
-            <p className="text-[11px] font-bold text-sky-600 tracking-wide uppercase">
-              Buku Tamu Digital
+            <p className="text-[10px] md:text-[11px] font-extrabold text-sky-600 tracking-wider uppercase">
+              Sistem Informasi Registrasi & Manajemen Tamu
             </p>
           </div>
         </div>
@@ -92,8 +94,14 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-2.5 bg-sky-50 hover:bg-sky-100 text-sky-950 text-xs font-extrabold px-3.5 py-1.5 rounded-full border border-sky-200/80 shadow-xs transition-all cursor-pointer"
             >
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white text-[11px] font-black shrink-0 shadow-xs">
-                {user?.nama ? user.nama.charAt(0).toUpperCase() : 'A'}
+              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white text-[11px] font-black shrink-0 shadow-xs overflow-hidden">
+                {user?.foto ? (
+                  <img src={user.foto} alt={user.nama} className="w-full h-full object-cover" />
+                ) : user?.nama ? (
+                  user.nama.charAt(0).toUpperCase()
+                ) : (
+                  'A'
+                )}
               </div>
               <span className="hidden sm:inline">{user?.nama || 'Administrator'}</span>
               <ChevronDown className={`w-3.5 h-3.5 text-sky-600 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
@@ -129,6 +137,15 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
                         <span>Dashboard Admin</span>
                       </Link>
                     )}
+
+                    <Link
+                      to="/admin/profile"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+                    >
+                      <User className="w-4 h-4 text-sky-600" />
+                      <span>Profil Saya</span>
+                    </Link>
                   </div>
 
                   <div className="border-t border-slate-100 mt-1 pt-1">
@@ -147,6 +164,16 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
           </div>
         </div>
       </div>
+
+      {/* Profile Edit Modal */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        onProfileUpdated={(updatedUser) => {
+          setUser(updatedUser);
+        }}
+      />
     </header>
   );
 };

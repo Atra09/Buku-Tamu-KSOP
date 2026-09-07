@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Flash from './flash/flash';
+import UserProfileModal from './UserProfileModal';
 import {
   LayoutDashboard, ClipboardList, Building, Layers, Users, History, ExternalLink, LogOut,
-  ChevronLeft, ChevronRight, Menu, X
+  ChevronLeft, ChevronRight, Menu, X, User
 } from 'lucide-react';
 
 const navItems = [
@@ -21,6 +22,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
 
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('sitamu_sidebar_collapsed') === 'true');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -30,6 +32,17 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+
+  let user = {};
+  try {
+    const rawUser = localStorage.getItem('sitamu_user');
+    if (rawUser && rawUser !== 'undefined') {
+      user = JSON.parse(rawUser);
+    }
+  } catch (e) {
+    user = {};
+  }
+  const userRole = (user.role || 'admin').toLowerCase();
 
   useEffect(() => {
     const loginFlash = sessionStorage.getItem('sitamu_login_flash');
@@ -41,7 +54,8 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
 
   const currentTab = activeTab || (
     location.pathname === '/admin/tamu' ? 'tamu' :
-    location.pathname === '/admin/tujuan' ? 'tujuan' : 'dashboard'
+    location.pathname === '/admin/tujuan' ? 'tujuan' :
+    location.pathname === '/admin/profile' ? 'profile' : 'dashboard'
   );
 
   const handleLogout = () => {
@@ -49,15 +63,15 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
     navigate('/login');
   };
 
-  const user = JSON.parse(localStorage.getItem('sitamu_user') || '{}');
-  const userRole = (user.role || 'admin').toLowerCase();
-
-  // Filter navigation items based on Role (Role 'user' only accesses Dashboard & Daftar Kunjungan)
+  // Filter navigation items based on Role (USER, KOORDINATOR, SUPER USER)
   const filteredNavItems = navItems.filter(item => {
     if (userRole === 'user') {
       return item.key === 'dashboard' || item.key === 'tamu';
     }
-    return true; // Admin gets access to all items
+    if (userRole === 'koordinator') {
+      return item.key === 'dashboard' || item.key === 'tamu' || item.key === 'tujuan' || item.key === 'kategori-asal' || item.key === 'log-aktivitas';
+    }
+    return true; // Super User / Admin gets access to all items
   });
 
   const renderNavLinks = (collapsed = false) => (
@@ -116,12 +130,20 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   );
 
   const renderUserFooter = (collapsed = false) => (
-    <div className={`border-t border-slate-900 bg-slate-900/50 flex items-center ${
-      collapsed ? 'p-3 justify-center' : 'p-4 gap-3'
-    }`}>
+    <div 
+      onClick={() => navigate('/admin/profile')}
+      className={`border-t border-slate-900 bg-slate-900/50 flex items-center hover:bg-slate-900/80 transition-colors cursor-pointer ${
+        collapsed ? 'p-3 justify-center' : 'p-4 gap-3'
+      }`}
+      title="Lihat Profil Saya"
+    >
       <div className={`flex items-center gap-3 truncate ${collapsed ? 'justify-center' : ''}`}>
-        <div className="w-9 h-9 rounded-full bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center font-black text-xs shrink-0 shadow-xs uppercase">
-          {user?.nama ? user.nama.substring(0, 2) : 'US'}
+        <div className="w-9 h-9 rounded-full bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center font-black text-xs shrink-0 shadow-xs uppercase overflow-hidden">
+          {user?.foto ? (
+            <img src={user.foto} alt={user.nama} className="w-full h-full object-cover" />
+          ) : (
+            user?.nama ? user.nama.substring(0, 2) : 'US'
+          )}
         </div>
         {!collapsed && (
           <div className="flex-1 truncate">
@@ -137,9 +159,9 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans text-slate-800 antialiased overflow-x-hidden">
+    <div className="h-screen w-screen bg-slate-100 flex flex-col md:flex-row font-sans text-slate-800 antialiased overflow-hidden">
       {/* Mobile Top Header */}
-      <header className="md:hidden bg-slate-950 text-white px-4 py-3 border-b border-slate-800 flex items-center justify-between sticky top-0 z-30 shadow-md">
+      <header className="md:hidden bg-slate-950 text-white px-4 py-3 border-b border-slate-800 flex items-center justify-between shrink-0 z-30 shadow-md">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsMobileOpen(true)}
@@ -181,13 +203,13 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
         </div>
       )}
 
-      {/* Desktop Collapsible Sidebar */}
-      <aside className={`hidden md:flex flex-col shrink-0 bg-slate-950 text-slate-300 border-r border-slate-800 shadow-xl transition-all duration-300 ease-in-out select-none relative ${
+      {/* Desktop Fixed Sticky Sidebar */}
+      <aside className={`hidden md:flex flex-col shrink-0 bg-slate-950 text-slate-300 border-r border-slate-800 shadow-xl transition-all duration-300 ease-in-out select-none relative h-full z-20 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3.5 top-1/2 -translate-y-1/2 bg-sky-600 hover:bg-sky-500 text-white p-1.5 rounded-full border-2 border-slate-950 shadow-md transition-transform hover:scale-110 cursor-pointer z-20"
+          className="absolute -right-3.5 top-1/2 -translate-y-1/2 bg-sky-600 hover:bg-sky-500 text-white p-1.5 rounded-full border-2 border-slate-950 shadow-md transition-transform hover:scale-110 cursor-pointer z-30"
           title={isCollapsed ? 'Perluas Sidebar' : 'Ciutkan Sidebar (Tampil Icon Saja)'}
         >
           {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
@@ -207,8 +229,8 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
         {renderUserFooter(isCollapsed)}
       </aside>
 
-      {/* Main Content Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      {/* Main Content Workspace (Scrollable Independently) */}
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto overflow-x-auto bg-slate-100">
         <div className="px-6 sm:px-10 pt-6 sm:pt-8 pb-2">
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">{title}</h2>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
@@ -218,10 +240,20 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
         <div className="px-6 sm:px-10 py-4 space-y-6 pb-12">
           {children}
         </div>
-      </div>
+      </main>
 
-      {/* Flash Notification Toast */}
+      {/* Flash Toast Notification */}
       <Flash toast={toast} onClose={() => setToast(null)} />
+
+      {/* User Profile Edit Modal */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        onProfileUpdated={() => {
+          window.location.reload();
+        }}
+      />
     </div>
   );
 };

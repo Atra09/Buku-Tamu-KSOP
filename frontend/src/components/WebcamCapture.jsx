@@ -51,6 +51,13 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
   }, [locationText]);
 
   useEffect(() => {
+    setCapturedImage(currentPhoto || null);
+    if (!currentPhoto && isMountedRef.current) {
+      startCamera();
+    }
+  }, [currentPhoto]);
+
+  useEffect(() => {
     isMountedRef.current = true;
     detectUserLocation();
 
@@ -282,7 +289,8 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
             }
           }
 
-          const fullLoc = parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          const coordStr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          const fullLoc = parts.length > 0 ? `${coordStr} (${parts.join(', ')})` : coordStr;
 
           if (isMountedRef.current) {
             setLocationText(fullLoc);

@@ -177,13 +177,23 @@ const PublicKsop = () => {
         setRegisteredGuest(guestData);
         setShowBadgeModal(true);
 
-        // Reset Form
+        // Record CETAK_KARTU_TAMU activity log
+        axios.post('/api/logs', {
+          action: 'CETAK_KARTU_TAMU',
+          details: `Mencetak Kartu Kunjungan Tamu: ${guestData.nama} (${guestData.no_reg})`
+        }, { headers }).catch(logErr => console.error('Error logging CETAK_KARTU_TAMU:', logErr));
+
+        // Complete Reset Form & Photo
         setFormData(prev => ({
-          ...prev,
           nama: '',
           no_telpon: '',
+          kategori_asal: kategoriAsalList.length > 0 ? kategoriAsalList[0] : prev.kategori_asal,
           asal_instansi: '',
-          alamat: ''
+          jenis_kelamin: 'Laki-laki',
+          alamat: '',
+          lokasi: latestLocationRef.current || '',
+          bertemu: tujuanList.length > 0 ? tujuanList[0] : prev.bertemu,
+          keperluan: keperluanList.length > 0 ? keperluanList[0] : prev.keperluan
         }));
         setFotoBase64(null);
       }

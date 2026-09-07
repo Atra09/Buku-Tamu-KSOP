@@ -36,9 +36,23 @@ const ActivityLogPage = () => {
         return 'bg-sky-50 text-sky-600 border-sky-200/60';
       case 'UPDATE_STATUS_TAMU':
         return 'bg-amber-50 text-amber-600 border-amber-200/60';
+      case 'HAPUS_TAMU':
+        return 'bg-rose-50 text-rose-600 border-rose-200/60';
       case 'TAMBAH_USER':
         return 'bg-purple-50 text-purple-600 border-purple-200/60';
+      case 'UPDATE_USER':
+        return 'bg-indigo-50 text-indigo-600 border-indigo-200/60';
       case 'HAPUS_USER':
+        return 'bg-rose-50 text-rose-600 border-rose-200/60';
+      case 'TAMBAH_TUJUAN':
+      case 'TAMBAH_KATEGORI_ASAL':
+      case 'TAMBAH_KEPERLUAN':
+        return 'bg-teal-50 text-teal-600 border-teal-200/60';
+      case 'EDIT_TUJUAN':
+      case 'EDIT_KATEGORI_ASAL':
+        return 'bg-cyan-50 text-cyan-600 border-cyan-200/60';
+      case 'HAPUS_TUJUAN':
+      case 'HAPUS_KATEGORI_ASAL':
         return 'bg-rose-50 text-rose-600 border-rose-200/60';
       default:
         return 'bg-slate-50 text-slate-600 border-slate-200/60';

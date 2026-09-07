@@ -37,16 +37,27 @@ const TujuanKunjungan = () => {
     }
   };
 
+  const getAuthHeaders = () => {
+    const userStr = localStorage.getItem('sitamu_user');
+    const userObj = userStr ? JSON.parse(userStr) : null;
+    const headers = {};
+    if (userObj && userObj.nama) {
+      headers['x-user-nama'] = encodeURIComponent(userObj.nama);
+    }
+    return { headers };
+  };
+
   const handleAddOrUpdateMasterTujuan = async (e) => {
     e.preventDefault();
     if (!newTujuan.trim()) return;
     try {
       setAddingMaster(true);
+      const config = getAuthHeaders();
       if (editingTujuanId) {
-        await axios.put(`/api/master/tujuan/${editingTujuanId}`, { nama_tujuan: newTujuan.trim() });
+        await axios.put(`/api/master/tujuan/${editingTujuanId}`, { nama_tujuan: newTujuan.trim() }, config);
         showToast('Perubahan tujuan kunjungan berhasil disimpan!', 'success');
       } else {
-        await axios.post('/api/master/tujuan', { nama_tujuan: newTujuan.trim() });
+        await axios.post('/api/master/tujuan', { nama_tujuan: newTujuan.trim() }, config);
         showToast('Tujuan kunjungan baru berhasil ditambahkan!', 'success');
       }
       setNewTujuan('');
@@ -68,7 +79,8 @@ const TujuanKunjungan = () => {
     if (!itemToDelete) return;
     setDeleting(true);
     try {
-      await axios.delete(`/api/master/tujuan/${itemToDelete.id}`);
+      const config = getAuthHeaders();
+      await axios.delete(`/api/master/tujuan/${itemToDelete.id}`, config);
       setItemToDelete(null);
       showToast(`Tujuan "${itemToDelete.nama_tujuan}" berhasil dihapus`, 'success');
       fetchMasterData();

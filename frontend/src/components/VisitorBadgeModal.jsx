@@ -19,10 +19,28 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
     return noReg;
   };
 
-  const handlePrint = useReactToPrint({
+  const triggerReactToPrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Struk-Si-Tamu-${guest?.no_reg || 'ID'}`
   });
+
+  const handlePrintClick = async () => {
+    try {
+      const userStr = localStorage.getItem('sitamu_user');
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const headers = {};
+      if (userObj && userObj.nama) {
+        headers['x-user-nama'] = encodeURIComponent(userObj.nama);
+      }
+      axios.post('/api/logs', {
+        action: 'CETAK_KARTU_TAMU',
+        details: `Mencetak Kartu Kunjungan Tamu: ${guest?.nama || '-'} (${guest?.no_reg || '-'})`
+      }, { headers }).catch(err => console.error('Error logging print activity:', err));
+    } catch (e) {
+      console.error('Error in log print:', e);
+    }
+    triggerReactToPrint();
+  };
 
   if (!guest) return null;
 
@@ -33,7 +51,7 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
         <div className="bg-emerald-950 text-white px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-base">Kartu / Struk Registrasi Si-Tamu</h3>
+            <h3 className="font-bold text-base">Kartu Kunjungan Tamu</h3>
           </div>
           <button
             onClick={onClose}
@@ -58,35 +76,35 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
               />
               <h4 className="font-black text-slate-800 text-base">Si-Tamu • KEMENTERIAN PERHUBUNGAN</h4>
             </div>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-4">
-              STRUK BUKU TAMU DIGITAL
+            <p className="text-[11px] text-emerald-800 font-extrabold uppercase tracking-widest mb-4">
+              KARTU KUNJUNGAN TAMU
             </p>
 
-            {/* Guest Photo if available */}
+            {/* Guest Photo if available (Extra Large 1:1 Square Aspect Ratio for clear printing) */}
             {guest.foto ? (
               <img
                 src={guest.foto.startsWith('data:') ? guest.foto : guest.foto}
                 alt={guest.nama}
-                className="w-28 h-28 mx-auto rounded-xl object-cover border-2 border-emerald-600 shadow-md mb-3"
+                className="w-64 h-64 aspect-square mx-auto rounded-2xl object-cover border-4 border-emerald-600 shadow-lg mb-4"
               />
             ) : (
-              <div className="w-28 h-28 mx-auto rounded-xl bg-slate-200 border-2 border-slate-300 flex items-center justify-center text-slate-400 mb-3">
-                <User className="w-12 h-12" />
+              <div className="w-64 h-64 aspect-square mx-auto rounded-2xl bg-slate-200 border-4 border-slate-300 flex items-center justify-center text-slate-400 mb-4">
+                <User className="w-28 h-28" />
               </div>
             )}
 
             {/* No Reg Highlight (Formatted as REG-YYMMDD for Struk display) */}
-            <div className="bg-emerald-600 text-white py-1.5 px-3 rounded-lg font-black text-sm tracking-widest mb-4 shadow-xs">
+            <div className="bg-emerald-600 text-white py-2 px-4 rounded-xl font-black text-base tracking-widest mb-4 shadow-xs">
               {formatDisplayNoReg(guest.no_reg)}
             </div>
 
             {/* Details Table */}
-            <div className="text-left space-y-2 text-xs">
+            <div className="text-left space-y-2.5 text-xs">
               <div className="flex items-start gap-2 border-b border-emerald-100 pb-1.5">
                 <User className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">Nama Tamu</span>
-                  <span className="font-bold text-slate-800">{guest.nama} ({guest.jenis_kelamin})</span>
+                  <span className="font-bold text-slate-800 text-sm">{guest.nama} ({guest.jenis_kelamin})</span>
                 </div>
               </div>
 
@@ -146,11 +164,11 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
             Tutup
           </button>
           <button
-            onClick={handlePrint}
-            className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm flex items-center gap-1.5 transition-all"
+            onClick={handlePrintClick}
+            className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Printer className="w-4 h-4" />
-            Cetak Struk
+            Cetak Kartu Kunjungan
           </button>
         </div>
       </div>

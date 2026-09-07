@@ -64,14 +64,6 @@ const Tamu = sequelize.define('Tamu', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  keperluan_id: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'master_keperluan',
-      key: 'id'
-    }
-  },
   user_id: {
     type: DataTypes.INTEGER,
     allowNull: true,
