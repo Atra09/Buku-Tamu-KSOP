@@ -129,22 +129,47 @@ exports.updateProfile = async (req, res) => {
       user.password = await bcrypt.hash(password, 10);
     }
 
+    // Helper untuk hapus file foto profil lama secara fisik
+    const oldFoto = user.foto;
+    const deleteOldProfilePhoto = (fotoPathStr) => {
+      if (!fotoPathStr || typeof fotoPathStr !== 'string') return;
+      const fs = require('fs');
+      const path = require('path');
+      try {
+        let targetFilePath = null;
+        if (fotoPathStr.startsWith('/profil/')) {
+          targetFilePath = path.resolve(__dirname, '../../frontend/public/profil', fotoPathStr.replace('/profil/', ''));
+        } else if (fotoPathStr.startsWith('/uploads/')) {
+          targetFilePath = path.resolve(__dirname, '../public/uploads', fotoPathStr.replace('/uploads/', ''));
+        }
+
+        if (targetFilePath && fs.existsSync(targetFilePath)) {
+          fs.unlinkSync(targetFilePath);
+          console.log('[Auth] Foto profil lama berhasil dihapus:', targetFilePath);
+        }
+      } catch (err) {
+        console.error('[Auth] Gagal menghapus foto profil lama:', err.message);
+      }
+    };
+
     // Handle foto file upload (Multer) or base64 string
     if (req.file) {
-      user.foto = `/uploads/${req.file.filename}`;
+      deleteOldProfilePhoto(oldFoto);
+      user.foto = `/profil/${req.file.filename}`;
     } else if (req.body.foto && req.body.foto.startsWith('data:image')) {
+      deleteOldProfilePhoto(oldFoto);
       try {
         const path = require('path');
         const fs = require('fs');
         const base64Data = req.body.foto.replace(/^data:image\/\w+;base64,/, '');
         const filename = `profile_${user.id}_${Date.now()}.png`;
-        const uploadDir = path.resolve(__dirname, '../public/uploads');
+        const uploadDir = path.resolve(__dirname, '../../frontend/public/profil');
         if (!fs.existsSync(uploadDir)) {
           fs.mkdirSync(uploadDir, { recursive: true });
         }
         const uploadPath = path.join(uploadDir, filename);
         fs.writeFileSync(uploadPath, base64Data, 'base64');
-        user.foto = `/uploads/${filename}`;
+        user.foto = `/profil/${filename}`;
       } catch (err) {
         console.error('Error saving base64 profile image:', err);
       }

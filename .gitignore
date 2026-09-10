@@ -14,10 +14,18 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment Variables
+# Environment Variables (.env files)
 .env
+.env.*
+*.env
+backend/.env
+frontend/.env
 .env.local
 .env.*.local
+
+# WhatsApp Bot Session Credentials (Baileys)
+backend/auth_info_baileys/*
+!backend/auth_info_baileys/.gitkeep
 
 # IDE & OS Files
 .DS_Store
@@ -32,5 +40,9 @@ backend/database.sqlite
 # Cache & Temporary Files
 .vite/
 frontend/.vite/
+
+# Uploaded Files & User Media
 backend/public/uploads/*
 !backend/public/uploads/.gitkeep
+frontend/public/profil/*
+!frontend/public/profil/.gitkeep

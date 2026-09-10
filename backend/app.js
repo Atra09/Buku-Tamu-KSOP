@@ -16,8 +16,9 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 const fs = require('fs');
 
-// Serve static uploads
+// Serve static uploads & profil
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use('/profil', express.static(path.join(__dirname, '../frontend/public/profil')));
 
 // Serve frontend production build (dist) if available
 const frontendDist = path.join(__dirname, '../frontend/dist');
@@ -30,7 +31,7 @@ app.use('/api', apiRouter);
 
 // Base route & SPA Fallback
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/profil')) {
     return res.status(404).json({ success: false, message: 'Endpoint tidak ditemukan' });
   }
   if (fs.existsSync(path.join(frontendDist, 'index.html'))) {

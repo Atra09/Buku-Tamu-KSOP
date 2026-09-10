@@ -10,7 +10,7 @@ const authController = require('../controllers/authController');
 const userController = require('../controllers/userController');
 const activityController = require('../controllers/activityController');
 
-// Multer storage configuration for file uploads
+// Multer storage configuration for guest uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = path.resolve(__dirname, '../public/uploads');
@@ -32,12 +32,28 @@ const storage = multer.diskStorage({
   }
 });
 
+// Multer storage configuration for user profile photos (frontend/public/profil)
+const profilStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.resolve(__dirname, '../../frontend/public/profil');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.png';
+    cb(null, `profile_${Date.now()}${ext}`);
+  }
+});
+
 const upload = multer({ storage });
+const uploadProfil = multer({ storage: profilStorage });
 
 // Auth Routes
 router.post('/auth/login', authController.login);
 router.get('/auth/me', authController.getProfile);
-router.put('/auth/profile', upload.single('foto'), authController.updateProfile);
+router.put('/auth/profile', uploadProfil.single('foto'), authController.updateProfile);
 
 // Tamu Routes
 router.get('/tamu', tamuController.getAllTamu);
