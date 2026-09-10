@@ -21,6 +21,7 @@ const PublicKsop = () => {
 
   const [fotoBase64, setFotoBase64] = useState(null);
   const [tujuanList, setTujuanList] = useState([]);
+  const [tujuanObjects, setTujuanObjects] = useState([]);
   const [keperluanList, setKeperluanList] = useState([]);
   const [kategoriAsalList, setKategoriAsalList] = useState([]);
   const [kategoriAsalObjects, setKategoriAsalObjects] = useState([]);
@@ -54,11 +55,13 @@ const PublicKsop = () => {
       const res = await axios.get('/api/master/dropdowns');
       if (res.data && res.data.data) {
         const fetchedTujuan = res.data.data.tujuan || [];
+        const fetchedTujuanObjects = res.data.data.tujuanList || [];
         const fetchedKeperluan = res.data.data.keperluan || [];
         const fetchedKategori = res.data.data.kategoriAsal || [];
         const fetchedKategoriObjects = res.data.data.kategoriAsalList || [];
 
         setTujuanList(fetchedTujuan);
+        setTujuanObjects(fetchedTujuanObjects);
         setKeperluanList(fetchedKeperluan);
         setKategoriAsalList(fetchedKategori);
         setKategoriAsalObjects(fetchedKategoriObjects);
@@ -153,7 +156,7 @@ const PublicKsop = () => {
         validLokasi = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
       }
 
-      const finalAsalInstansi = isOnlyAddress 
+      const finalAsalInstansi = isOnlyAddress
         ? (formData.kategori_asal || 'Masyarakat Umum')
         : formData.asal_instansi.trim();
 
@@ -174,8 +177,61 @@ const PublicKsop = () => {
       const res = await axios.post('/api/tamu', payload, { headers });
       if (res.data && res.data.success) {
         const guestData = res.data.data;
-        setRegisteredGuest(guestData);
+
+        // Cari data master tujuan terpilih untuk mengambil nama pejabat dan no_hp WA
+        const matchedTujuan = tujuanObjects.find(t => t.nama_tujuan === guestData.bertemu);
+        const guestWithTargetInfo = {
+          ...guestData,
+          nama_pejabat: matchedTujuan?.nama_pejabat || null,
+          no_hp: matchedTujuan?.no_hp || null
+        };
+
+        setRegisteredGuest(guestWithTargetInfo);
         setShowBadgeModal(true);
+
+        // Secara otomatis membuka WhatsApp Web dengan notifikasi formal jika nomor HP tujuan terdaftar
+        if (matchedTujuan && matchedTujuan.no_hp) {
+          let cleanNumber = matchedTujuan.no_hp.replace(/[^0-9]/g, '');
+          if (cleanNumber.startsWith('0')) {
+            cleanNumber = '62' + cleanNumber.substring(1);
+          }
+
+          const namaTujuanStr = guestData.bertemu || 'Pejabat / Staf Tujuan';
+          const namaPejabatStr = matchedTujuan.nama_pejabat ? `Bpk/Ibu ${matchedTujuan.nama_pejabat}` : `Bpk/Ibu ${namaTujuanStr}`;
+
+          const asalStr = (guestData.asal_instansi && guestData.kategori_asal && guestData.asal_instansi.trim().toLowerCase() !== guestData.kategori_asal.trim().toLowerCase())
+            ? `${guestData.asal_instansi} (${guestData.kategori_asal})`
+            : (guestData.asal_instansi || guestData.kategori_asal || '-');
+
+          let lokasiFormatted = guestData.lokasi || '-';
+          if (lokasiFormatted.includes(' (')) {
+            lokasiFormatted = lokasiFormatted.replace(' (', '\n   (');
+          }
+
+          const waMessageText = `*PEMBERITAHUAN KEDATANGAN TAMU KSOP*
+
+Yth. *${namaPejabatStr}*
+(${namaTujuanStr})
+
+Dengan hormat, kami beritahukan bahwa saat ini telah hadir tamu di Kantor KSOP yang ingin melakukan pertemuan dengan Bapak/Ibu.
+
+📌 *Detail Registrasi Kunjungan Tamu:*
+ • *No. Registrasi:* ${guestData.no_reg || '-'}
+ • *Nama Tamu:* ${guestData.nama || '-'} (${guestData.jenis_kelamin || '-'})
+ • *Asal / Instansi:* ${asalStr}
+ • *No. Telepon:* ${guestData.no_telpon || '-'}
+ • *Keperluan:* ${guestData.keperluan || '-'}
+ • *Waktu:* ${guestData.tanggal || '-'} - ${guestData.jam || '-'} WIB
+ • *Lokasi Presensi:* ${lokasiFormatted}
+
+Demikian pemberitahuan ini kami sampaikan. Mohon untuk dapat memberikan konfirmasi atau arahan selanjutnya.
+
+Terima kasih.
+> _Pesan ini dikirimkan secara otomatis melalui Sistem Informasi Buku Tamu Digital (Si-Tamu) KSOP._`;
+
+          const waUrl = `https://api.whatsapp.com/send?phone=${cleanNumber}&text=${encodeURIComponent(waMessageText)}`;
+          window.open(waUrl, '_blank');
+        }
 
         // Record CETAK_KARTU_TAMU activity log
         axios.post('/api/logs', {
@@ -213,7 +269,7 @@ const PublicKsop = () => {
         {/* Seamless Form directly on main background */}
         <form onSubmit={handleSubmit} className="w-full">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            
+
             {/* Inputs Left Column */}
             <div className="md:col-span-7 space-y-3.5 bg-white/95 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5 h-fit">
               <div className="border-b border-sky-100 pb-3 mb-2">

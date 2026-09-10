@@ -51,9 +51,13 @@ exports.getDropdownData = async (req, res) => {
 // Add new Master Tujuan
 exports.addTujuan = async (req, res) => {
   try {
-    const { nama_tujuan } = req.body;
+    const { nama_tujuan, nama_pejabat, no_hp } = req.body;
     if (!nama_tujuan) return res.status(400).json({ success: false, message: 'Nama tujuan wajib' });
-    const item = await MasterTujuan.create({ nama_tujuan });
+    const item = await MasterTujuan.create({
+      nama_tujuan,
+      nama_pejabat: nama_pejabat || null,
+      no_hp: no_hp || null
+    });
     
     await logActivity(req, 'TAMBAH_TUJUAN', `Menambahkan tujuan kunjungan baru: ${nama_tujuan}`);
 
@@ -67,14 +71,18 @@ exports.addTujuan = async (req, res) => {
 exports.updateTujuan = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama_tujuan } = req.body;
+    const { nama_tujuan, nama_pejabat, no_hp } = req.body;
     const item = await MasterTujuan.findByPk(id);
     if (!item) return res.status(404).json({ success: false, message: 'Data tidak ditemukan' });
 
     const oldName = item.nama_tujuan;
-    await item.update({ nama_tujuan });
+    await item.update({
+      nama_tujuan: nama_tujuan !== undefined ? nama_tujuan : item.nama_tujuan,
+      nama_pejabat: nama_pejabat !== undefined ? nama_pejabat : item.nama_pejabat,
+      no_hp: no_hp !== undefined ? no_hp : item.no_hp
+    });
 
-    await logActivity(req, 'EDIT_TUJUAN', `Mengubah tujuan kunjungan dari "${oldName}" menjadi "${nama_tujuan}"`);
+    await logActivity(req, 'EDIT_TUJUAN', `Mengubah tujuan kunjungan dari "${oldName}" menjadi "${nama_tujuan || oldName}"`);
 
     res.json({ success: true, data: item });
   } catch (error) {

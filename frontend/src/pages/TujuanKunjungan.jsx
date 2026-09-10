@@ -7,6 +7,8 @@ import Flash from '../components/flash/flash';
 const TujuanKunjungan = () => {
   const [masterTujuanObjects, setMasterTujuanObjects] = useState([]);
   const [newTujuan, setNewTujuan] = useState('');
+  const [newNamaPejabat, setNewNamaPejabat] = useState('');
+  const [newNoHp, setNewNoHp] = useState('');
   const [editingTujuanId, setEditingTujuanId] = useState(null);
   const [addingMaster, setAddingMaster] = useState(false);
 
@@ -47,21 +49,33 @@ const TujuanKunjungan = () => {
     return { headers };
   };
 
+  const resetForm = () => {
+    setEditingTujuanId(null);
+    setNewTujuan('');
+    setNewNamaPejabat('');
+    setNewNoHp('');
+  };
+
   const handleAddOrUpdateMasterTujuan = async (e) => {
     e.preventDefault();
     if (!newTujuan.trim()) return;
     try {
       setAddingMaster(true);
       const config = getAuthHeaders();
+      const payload = {
+        nama_tujuan: newTujuan.trim(),
+        nama_pejabat: newNamaPejabat.trim() || null,
+        no_hp: newNoHp.trim() || null
+      };
+
       if (editingTujuanId) {
-        await axios.put(`/api/master/tujuan/${editingTujuanId}`, { nama_tujuan: newTujuan.trim() }, config);
+        await axios.put(`/api/master/tujuan/${editingTujuanId}`, payload, config);
         showToast('Perubahan tujuan kunjungan berhasil disimpan!', 'success');
       } else {
-        await axios.post('/api/master/tujuan', { nama_tujuan: newTujuan.trim() }, config);
+        await axios.post('/api/master/tujuan', payload, config);
         showToast('Tujuan kunjungan baru berhasil ditambahkan!', 'success');
       }
-      setNewTujuan('');
-      setEditingTujuanId(null);
+      resetForm();
       fetchMasterData();
     } catch (err) {
       showToast('Gagal menyimpan Master Tujuan', 'error');
@@ -72,7 +86,9 @@ const TujuanKunjungan = () => {
 
   const handleEditMasterTujuan = (item) => {
     setEditingTujuanId(item.id);
-    setNewTujuan(item.nama_tujuan);
+    setNewTujuan(item.nama_tujuan || '');
+    setNewNamaPejabat(item.nama_pejabat || '');
+    setNewNoHp(item.no_hp || '');
   };
 
   const executeDelete = async () => {
@@ -97,10 +113,10 @@ const TujuanKunjungan = () => {
       subtitle="Sistem Informasi Buku Tamu Digital (Si-Tamu) - Panel Administrator"
       activeTab="tujuan"
     >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
         {/* Form Input Tambah / Edit Master Tujuan */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="md:col-span-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 h-fit">
           <div className="flex items-center justify-between">
             <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
               <Building className="w-4 h-4 text-sky-600" />
@@ -108,7 +124,7 @@ const TujuanKunjungan = () => {
             </h3>
             {editingTujuanId && (
               <button
-                onClick={() => { setEditingTujuanId(null); setNewTujuan(''); }}
+                onClick={resetForm}
                 className="text-xs font-bold text-rose-500 hover:underline cursor-pointer"
               >
                 Batal Edit
@@ -117,13 +133,13 @@ const TujuanKunjungan = () => {
           </div>
 
           <p className="text-xs text-slate-500">
-            Daftar ini akan muncul sebagai opsi pilihan "Bertemu (Tujuan)" pada form pendaftaran KSOP.
+            Kelola nama unit/jabatan tujuan, nama pejabat/penanggung jawab, dan nomor WhatsApp untuk penerimaan notifikasi tamu otomatis.
           </p>
 
           <form onSubmit={handleAddOrUpdateMasterTujuan} className="space-y-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Nama Tujuan Kunjungan <span className="text-rose-500">*</span>
+                Nama Tujuan / Jabatan <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -135,7 +151,33 @@ const TujuanKunjungan = () => {
               />
             </div>
 
-            <div className="flex gap-2">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Nama Pejabat / Penanggung Jawab <span className="text-slate-400 font-normal">(Opsional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Kapten Ahmad, M.Mar / Ibu Rahma, S.H."
+                value={newNamaPejabat}
+                onChange={(e) => setNewNamaPejabat(e.target.value)}
+                className="w-full text-xs font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-slate-50 text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                No. HP / WhatsApp Tujuan <span className="text-slate-400 font-normal">(cth: 08123456789)</span>
+              </label>
+              <input
+                type="tel"
+                placeholder="Masukkan No. HP / WA untuk Notifikasi WA"
+                value={newNoHp}
+                onChange={(e) => setNewNoHp(e.target.value)}
+                className="w-full text-xs font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-slate-50 text-slate-800"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
               <button
                 type="submit"
                 disabled={addingMaster}
@@ -153,29 +195,30 @@ const TujuanKunjungan = () => {
         </div>
 
         {/* CRUD Table Master Tujuan */}
-        <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="md:col-span-8 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="border-b border-slate-100 pb-3">
             <h3 className="font-extrabold text-slate-800 text-sm">
               Tabel Master Tujuan ({masterTujuanObjects.length})
             </h3>
-            <p className="text-xs text-slate-400">Kelola opsi tujuan kunjungan tamu secara fleksibel</p>
+            <p className="text-xs text-slate-400">Kelola opsi tujuan kunjungan tamu dan nomor notifikasi WhatsApp pejabat</p>
           </div>
 
-          <div className="overflow-x-auto max-h-[260px] overflow-y-auto rounded-xl border border-slate-200 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-50">
+          <div className="overflow-x-auto max-h-[380px] overflow-y-auto rounded-xl border border-slate-200 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-50">
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 z-10 bg-slate-100 shadow-xs">
                 <tr className="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200">
-                  <th className="p-3 w-12 text-center">NO</th>
-                  <th className="p-3">NAMA TUJUAN</th>
-                  <th className="p-3 w-28 text-center">STATUS</th>
-                  <th className="p-3 w-24 text-center">AKSI</th>
+                  <th className="p-3 w-10 text-center">NO</th>
+                  <th className="p-3">TUJUAN / JABATAN</th>
+                  <th className="p-3">PEJABAT / KONTAK</th>
+                  <th className="p-3">NO. HP / WA</th>
+                  <th className="p-3 w-20 text-center">AKSI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {masterTujuanObjects.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="text-center py-6 text-slate-400">
-                      Belum ada master tujuan / PT terdaftar.
+                    <td colSpan="5" className="text-center py-6 text-slate-400">
+                      Belum ada master tujuan terdaftar.
                     </td>
                   </tr>
                 ) : (
@@ -183,10 +226,15 @@ const TujuanKunjungan = () => {
                     <tr key={item.id || idx} className="hover:bg-sky-50/40 transition-colors">
                       <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
                       <td className="p-3 font-extrabold text-slate-800">{item.nama_tujuan}</td>
-                      <td className="p-3 text-center">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Aktif
-                        </span>
+                      <td className="p-3 text-slate-700 font-semibold">{item.nama_pejabat || '-'}</td>
+                      <td className="p-3 font-mono font-bold text-sky-700">
+                        {item.no_hp ? (
+                          <span className="inline-flex items-center gap-1 bg-sky-50 px-2 py-0.5 rounded-lg border border-sky-200">
+                            📱 {item.no_hp}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic font-normal">Belum diisi</span>
+                        )}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">

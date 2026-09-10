@@ -11,6 +11,14 @@ const MasterTujuan = sequelize.define('MasterTujuan', {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true
+  },
+  nama_pejabat: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  no_hp: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   tableName: 'master_tujuan',
