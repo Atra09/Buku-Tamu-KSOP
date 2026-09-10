@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Building, Plus, Tag, Trash2, AlertTriangle, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Building, Plus, Tag, Trash2, AlertTriangle } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import Flash from '../components/flash/flash';
 
@@ -229,8 +229,8 @@ const TujuanKunjungan = () => {
                       <td className="p-3 text-slate-700 font-semibold">{item.nama_pejabat || '-'}</td>
                       <td className="p-3 font-mono font-bold text-sky-700">
                         {item.no_hp ? (
-                          <span className="inline-flex items-center gap-1 bg-sky-50 px-2 py-0.5 rounded-lg border border-sky-200">
-                            📱 {item.no_hp}
+                          <span className="inline-flex items-center bg-sky-50 px-2.5 py-0.5 rounded-lg border border-sky-200">
+                            {item.no_hp}
                           </span>
                         ) : (
                           <span className="text-slate-400 italic font-normal">Belum diisi</span>
@@ -266,8 +266,8 @@ const TujuanKunjungan = () => {
 
       {/* Custom Delete Confirmation Modal */}
       {itemToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-rose-100 text-center space-y-4">
+        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-rose-100 text-center space-y-4">
             <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
               <AlertTriangle className="w-6 h-6" />
             </div>

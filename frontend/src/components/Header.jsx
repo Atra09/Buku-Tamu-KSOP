@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Building2, Clock, Calendar, LayoutDashboard, UserCheck, ChevronDown, LogOut, User } from 'lucide-react';
+import { Calendar, LayoutDashboard, UserCheck, ChevronDown, LogOut, User } from 'lucide-react';
 import UserProfileModal from './UserProfileModal';
 
 const Header = ({ companyName = "KSOP Si-Tamu" }) => {

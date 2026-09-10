@@ -198,7 +198,7 @@ const DaftarKunjungan = () => {
     const monthLabel = monthObj ? monthObj.label : exportMonth;
 
     const filtered = allData.filter(g => g.tanggal && g.tanggal.startsWith(targetPrefix));
-    
+
     if (filtered.length === 0) {
       showToast(`Tidak ada data kunjungan tamu untuk periode ${monthLabel} ${exportYear}`, 'error');
       return;
@@ -235,12 +235,12 @@ const DaftarKunjungan = () => {
       activeTab="tamu"
     >
       <div className="space-y-4">
-        
+
         {/* Search & Filter Toolbar */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
           <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
             <h3 className="font-extrabold text-slate-800 text-sm">Tabel Data Tamu Terintegrasi</h3>
-            
+
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
                 Total: {tamuList.length} Tamu
@@ -397,8 +397,10 @@ const DaftarKunjungan = () => {
                       </td>
 
                       {/* Keperluan */}
-                      <td className="p-3 text-slate-600 max-w-xs truncate">
-                        {g.keperluan}
+                      <td className="p-3 text-slate-600 max-w-[200px]" title={g.keperluan}>
+                        <p className="line-clamp-2 whitespace-normal leading-snug break-words">
+                          {g.keperluan}
+                        </p>
                       </td>
 
                       {/* Datang */}
@@ -423,11 +425,10 @@ const DaftarKunjungan = () => {
                       <td className="p-3">
                         <button
                           onClick={() => handleToggleStatus(g.id, g.status)}
-                          className={`px-3 py-1 rounded-full text-[11px] font-extrabold cursor-pointer transition-all shadow-xs ${
-                            g.status === 'Berkunjung'
+                          className={`px-3 py-1 rounded-full text-[11px] font-extrabold cursor-pointer transition-all shadow-xs ${g.status === 'Berkunjung'
                               ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
                               : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
-                          }`}
+                            }`}
                           title="Klik untuk ubah status"
                         >
                           {g.status}
@@ -505,11 +506,10 @@ const DaftarKunjungan = () => {
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                      currentPage === page
+                    className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${currentPage === page
                         ? 'bg-sky-600 text-white shadow-xs shadow-sky-600/30'
                         : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>
@@ -531,11 +531,11 @@ const DaftarKunjungan = () => {
 
       {/* Photo Preview Modal */}
       {previewPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-fadeIn">
+        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
           <div className="relative max-w-2xl w-full bg-white rounded-2xl p-2 shadow-2xl">
             <button
               onClick={() => setPreviewPhoto(null)}
-              className="absolute top-4 right-4 z-10 bg-slate-900/80 text-white p-2 rounded-full hover:bg-slate-900 transition-colors"
+              className="absolute top-4 right-4 z-10 bg-slate-900/80 text-white p-2 rounded-full hover:bg-slate-900 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -550,15 +550,15 @@ const DaftarKunjungan = () => {
 
       {/* Detail Guest Modal */}
       {detailGuest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200">
-            <div className="bg-slate-950 text-white px-5 py-3 flex items-center justify-between">
+        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
+            <div className="bg-slate-950 text-white px-5 py-3 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-sm">Detail Informasi Tamu</h3>
               <button onClick={() => setDetailGuest(null)} className="cursor-pointer">
                 <X className="w-5 h-5 text-slate-300 hover:text-white" />
               </button>
             </div>
-            <div className="p-5 space-y-3 text-xs">
+            <div className="p-5 space-y-3 text-xs overflow-y-auto flex-1">
               {detailGuest.foto ? (
                 <div className="text-center mb-3">
                   <img
@@ -649,7 +649,7 @@ const DaftarKunjungan = () => {
                 <ExternalLink className="w-4 h-4 text-sky-400 opacity-70 group-hover:opacity-100 transition-opacity" />
               </button>
             </div>
-            <div className="bg-slate-100 px-5 py-3 text-right">
+            <div className="bg-slate-100 px-5 py-3 text-right shrink-0 border-t border-slate-200">
               <button
                 onClick={() => setDetailGuest(null)}
                 className="px-4 py-1.5 bg-slate-950 hover:bg-slate-900 text-white font-bold rounded-lg cursor-pointer"
@@ -665,7 +665,7 @@ const DaftarKunjungan = () => {
       {selectedLocationMap && (() => {
         const rawLoc = selectedLocationMap.lokasi || '';
         const isNotDetected = !rawLoc || rawLoc === 'Lokasi Tidak Terdeteksi';
-        
+
         // Extract exact coordinates if available (e.g. -7.043512, 113.882145), otherwise use full string
         let mapQuery = 'Kalianget, Sumenep';
         if (!isNotDetected) {
@@ -678,11 +678,11 @@ const DaftarKunjungan = () => {
         }
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xs animate-fadeIn">
-            <div className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-200 space-y-0 transform transition-all">
+          <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 backdrop-blur-xs animate-fadeIn">
+            <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 space-y-0 transform transition-all">
               
               {/* Modal Header */}
-              <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 p-4 px-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800">
+              <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 p-4 px-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 border border-sky-400/30 flex items-center justify-center font-bold shadow-inner shrink-0">
                     <MapPin className="w-5 h-5" />
@@ -706,11 +706,10 @@ const DaftarKunjungan = () => {
                     <button
                       type="button"
                       onClick={() => setMapViewMode('k')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                        mapViewMode === 'k'
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${mapViewMode === 'k'
                           ? 'bg-sky-500 text-white shadow-xs'
                           : 'text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                       title="Tampilan Foto Satelit / Udara"
                     >
                       📡 Satelit
@@ -718,11 +717,10 @@ const DaftarKunjungan = () => {
                     <button
                       type="button"
                       onClick={() => setMapViewMode('m')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                        mapViewMode === 'm'
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${mapViewMode === 'm'
                           ? 'bg-sky-500 text-white shadow-xs'
                           : 'text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                       title="Tampilan Peta Vektor Jalan"
                     >
                       🗺️ Jalan
@@ -764,7 +762,7 @@ const DaftarKunjungan = () => {
               </div>
 
               {/* Modal Footer: Address details & Google Maps Link */}
-              <div className="bg-slate-50 p-4 px-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="bg-slate-50 p-4 px-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
                 <div className="flex items-start gap-3 text-xs flex-1">
                   <MapPin className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
                   <div>
@@ -809,7 +807,7 @@ const DaftarKunjungan = () => {
 
       {/* Custom Delete Confirmation Modal */}
       {guestToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-rose-100 text-center space-y-4">
             <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
               <AlertTriangle className="w-6 h-6" />
@@ -851,7 +849,7 @@ const DaftarKunjungan = () => {
 
       {/* Excel Export Options Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-emerald-100 overflow-hidden space-y-0">
             <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-4 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">

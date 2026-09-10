@@ -9,6 +9,7 @@ import UserManagement from './pages/UserManagement';
 import ActivityLogPage from './pages/ActivityLogPage';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
+import NotifBot from './pages/NotifBot';
 import { stopAllGlobalWebcamStreams } from './components/WebcamCapture';
 
 // Automatic Hardware Camera Cleanup on Route Navigation
@@ -223,6 +224,14 @@ function App() {
             <ProtectedRoute>
               <ProfilePage />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/notif-bot"
+          element={
+            <AdminOnlyRoute>
+              <NotifBot />
+            </AdminOnlyRoute>
           }
         />
         {/* Fallback Wildcard Route */}

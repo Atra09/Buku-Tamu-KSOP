@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminLayout from '../components/AdminLayout';
-import { History, Search, RefreshCw, UserCheck, Shield, Clock, FileText } from 'lucide-react';
+import { Search, RefreshCw, Clock } from 'lucide-react';
 
 const ActivityLogPage = () => {
   const [logs, setLogs] = useState([]);

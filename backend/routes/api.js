@@ -62,8 +62,21 @@ router.post('/users', userController.createUser);
 router.put('/users/:id', userController.updateUser);
 router.delete('/users/:id', userController.deleteUser);
 
+const localWaBot = require('../services/localWaBot');
+
 // Activity Log Routes
 router.get('/logs', activityController.getActivityLogs);
 router.post('/logs', activityController.createLog);
+
+// WA Bot Status & Control Routes
+router.get('/wa-bot/status', (req, res) => {
+  const status = localWaBot.getBotStatus();
+  res.json({ success: true, ...status });
+});
+
+router.post('/wa-bot/disconnect', async (req, res) => {
+  const result = await localWaBot.disconnectWhatsApp();
+  res.json(result);
+});
 
 module.exports = router;

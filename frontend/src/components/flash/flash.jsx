@@ -13,7 +13,7 @@ const Flash = ({ toast, onClose }) => {
     const isSuccess = toast.type === 'success';
 
     return (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-bounceIn shadow-2xl transition-all select-none max-w-[90vw]">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] animate-bounceIn shadow-2xl transition-all select-none max-w-[90vw]">
             <div
                 className={`flex items-center gap-3 px-4 py-3 rounded-2xl border bg-white shadow-xl ${isSuccess
                     ? 'text-emerald-700 border-emerald-300 shadow-emerald-900/10'

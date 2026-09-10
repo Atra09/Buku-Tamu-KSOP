@@ -44,13 +44,18 @@ app.get('*', (req, res) => {
   });
 });
 
-// Sync DB and seed initial master data
+const localWaBot = require('./services/localWaBot');
+
+// Sync DB, seed initial master data, and start Local WA Bot
 const startDatabase = async () => {
   try {
     await ensureMySQLDatabaseExists();
     await sequelize.sync({ alter: true });
     console.log('Database db_bukutamu synced successfully');
     await seedInitialData();
+
+    // Start Local WA Bot (Baileys)
+    localWaBot.connectToWhatsApp();
   } catch (err) {
     console.error('Failed to sync database db_bukutamu:', err);
   }

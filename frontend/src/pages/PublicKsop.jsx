@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { UserCheck, Camera, Send, FileText, CheckCircle2, ShieldCheck, User, Building, Phone, MapPin, Tag, AlertCircle, X } from 'lucide-react';
+import { UserCheck, Camera } from 'lucide-react';
 import Header from '../components/Header';
 import WebcamCapture from '../components/WebcamCapture';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
@@ -189,49 +189,9 @@ const PublicKsop = () => {
         setRegisteredGuest(guestWithTargetInfo);
         setShowBadgeModal(true);
 
-        // Secara otomatis membuka WhatsApp Web dengan notifikasi formal jika nomor HP tujuan terdaftar
-        if (matchedTujuan && matchedTujuan.no_hp) {
-          let cleanNumber = matchedTujuan.no_hp.replace(/[^0-9]/g, '');
-          if (cleanNumber.startsWith('0')) {
-            cleanNumber = '62' + cleanNumber.substring(1);
-          }
+        const targetPejabatLabel = guestData.bertemu || 'Tujuan Kunjungan';
 
-          const namaTujuanStr = guestData.bertemu || 'Pejabat / Staf Tujuan';
-          const namaPejabatStr = matchedTujuan.nama_pejabat ? `Bpk/Ibu ${matchedTujuan.nama_pejabat}` : `Bpk/Ibu ${namaTujuanStr}`;
-
-          const asalStr = (guestData.asal_instansi && guestData.kategori_asal && guestData.asal_instansi.trim().toLowerCase() !== guestData.kategori_asal.trim().toLowerCase())
-            ? `${guestData.asal_instansi} (${guestData.kategori_asal})`
-            : (guestData.asal_instansi || guestData.kategori_asal || '-');
-
-          let lokasiFormatted = guestData.lokasi || '-';
-          if (lokasiFormatted.includes(' (')) {
-            lokasiFormatted = lokasiFormatted.replace(' (', '\n   (');
-          }
-
-          const waMessageText = `*PEMBERITAHUAN KEDATANGAN TAMU KSOP*
-
-Yth. *${namaPejabatStr}*
-(${namaTujuanStr})
-
-Dengan hormat, kami beritahukan bahwa saat ini telah hadir tamu di Kantor KSOP yang ingin melakukan pertemuan dengan Bapak/Ibu.
-
-📌 *Detail Registrasi Kunjungan Tamu:*
- • *No. Registrasi:* ${guestData.no_reg || '-'}
- • *Nama Tamu:* ${guestData.nama || '-'} (${guestData.jenis_kelamin || '-'})
- • *Asal / Instansi:* ${asalStr}
- • *No. Telepon:* ${guestData.no_telpon || '-'}
- • *Keperluan:* ${guestData.keperluan || '-'}
- • *Waktu:* ${guestData.tanggal || '-'} - ${guestData.jam || '-'} WIB
- • *Lokasi Presensi:* ${lokasiFormatted}
-
-Demikian pemberitahuan ini kami sampaikan. Mohon untuk dapat memberikan konfirmasi atau arahan selanjutnya.
-
-Terima kasih.
-> _Pesan ini dikirimkan secara otomatis melalui Sistem Informasi Buku Tamu Digital (Si-Tamu) KSOP._`;
-
-          const waUrl = `https://api.whatsapp.com/send?phone=${cleanNumber}&text=${encodeURIComponent(waMessageText)}`;
-          window.open(waUrl, '_blank');
-        }
+        showToast(`Kunjungan Anda telah disampaikan kepada ${targetPejabatLabel}`, 'success');
 
         // Record CETAK_KARTU_TAMU activity log
         axios.post('/api/logs', {

@@ -45,7 +45,7 @@ const VisitorBadgeModal = ({ guest, onClose }) => {
   if (!guest) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+    <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-sky-100 flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="bg-sky-600 text-white px-5 py-3.5 flex items-center justify-between shadow-sm">

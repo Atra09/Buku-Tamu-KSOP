@@ -2,6 +2,7 @@ const { Tamu, MasterTujuan, MasterKategoriAsal, ActivityLog } = require('../mode
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
+const waService = require('../services/waService');
 
 // Helper to generate registration number e.g. REG-20260907-0001 (Unique & Incremental)
 const generateNoReg = async () => {
@@ -205,6 +206,15 @@ exports.createTamu = async (req, res) => {
       jam,
       status: 'Berkunjung'
     });
+
+    // Kirim notifikasi WA secara otomatis di latar belakang jika pejabat tujuan memiliki kontak HP
+    if (matchedTujuan && matchedTujuan.no_hp) {
+      waService.sendWANotification({
+        targetNoHp: matchedTujuan.no_hp,
+        namaPejabat: matchedTujuan.nama_pejabat,
+        guest: newTamu.toJSON()
+      }).catch(waErr => console.error('Error sending WA notification background:', waErr));
+    }
 
     // Record Activity Log
     try {
