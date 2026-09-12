@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const waService = require('../services/waService');
+const localWaBot = require('../services/localWaBot');
 
 // Helper to generate registration number e.g. REG-20260907-0001 (Unique & Incremental)
 const generateNoReg = async () => {
@@ -112,6 +113,15 @@ exports.getTamuById = async (req, res) => {
 // Register new guest (Form registration)
 exports.createTamu = async (req, res) => {
   try {
+    // Validate WA Bot status BEFORE creating guest record
+    const botStatus = localWaBot.getBotStatus();
+    if (!botStatus || !botStatus.isConnected) {
+      return res.status(400).json({
+        success: false,
+        botNotConnected: true,
+        message: 'bot belum terhubung, silahkan hubungi admin !!'
+      });
+    }
     const {
       nama,
       no_telpon,

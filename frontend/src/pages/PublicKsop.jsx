@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import WebcamCapture from '../components/WebcamCapture';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
 import Flash from '../components/flash/flash';
+import NotifPopup from '../components/flash/NotifPopup';
 
 const PublicKsop = () => {
   const [formData, setFormData] = useState({
@@ -28,6 +29,9 @@ const PublicKsop = () => {
   const [loading, setLoading] = useState(false);
   const [registeredGuest, setRegisteredGuest] = useState(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
+
+  // Dedicated WA Bot Disconnected Error Pop-up State
+  const [botPopup, setBotPopup] = useState({ isOpen: false, message: '' });
 
   const latestLocationRef = useRef('');
 
@@ -215,7 +219,16 @@ const PublicKsop = () => {
       }
     } catch (err) {
       console.error('Error registering guest:', err);
-      showToast('Gagal menyimpan registrasi tamu: ' + (err.response?.data?.message || err.message), 'error');
+      const errData = err.response?.data;
+      if (errData?.botNotConnected || (errData?.message && errData.message.toLowerCase().includes('bot belum terhubung'))) {
+        setToast(null); // Memastikan flash toast TIDAK muncul bersamaan
+        setBotPopup({
+          isOpen: true,
+          message: errData.message || 'bot belum terhubung, silahkan hubungi admin !!'
+        });
+      } else {
+        showToast('Gagal menyimpan registrasi tamu: ' + (errData?.message || err.message), 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -450,6 +463,13 @@ const PublicKsop = () => {
 
       {/* Flash Notification Toast */}
       <Flash toast={toast} onClose={() => setToast(null)} />
+
+      {/* Dedicated WA Bot Disconnected Pop-up Modal */}
+      <NotifPopup
+        isOpen={botPopup.isOpen}
+        message={botPopup.message}
+        onClose={() => setBotPopup({ isOpen: false, message: '' })}
+      />
 
       {/* Visitor Badge Modal */}
       {showBadgeModal && (
