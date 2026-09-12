@@ -51,7 +51,20 @@ const NotifBot = () => {
   const handleDisconnect = async () => {
     setDisconnecting(true);
     try {
-      const res = await axios.post('/api/wa-bot/disconnect');
+      const rawUser = localStorage.getItem('sitamu_user');
+      let userNama = 'Admin';
+      if (rawUser && rawUser !== 'undefined') {
+        try {
+          const parsed = JSON.parse(rawUser);
+          userNama = parsed.nama || parsed.username || 'Admin';
+        } catch (e) {}
+      }
+
+      const res = await axios.post('/api/wa-bot/disconnect', {}, {
+        headers: {
+          'x-user-nama': encodeURIComponent(userNama)
+        }
+      });
       if (res.data?.success) {
         showToast('Koneksi WhatsApp Bot berhasil diputuskan.', 'success');
         setShowConfirmModal(false);

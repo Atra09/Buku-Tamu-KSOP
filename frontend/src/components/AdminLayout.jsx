@@ -31,7 +31,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   } catch (e) {
     user = {};
   }
-  const userRole = (user.role || 'admin').toLowerCase();
+  const userRole = (user.role || 'user').toLowerCase();
 
   useEffect(() => {
     const loginFlash = sessionStorage.getItem('sitamu_login_flash');
@@ -43,12 +43,12 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
 
   const currentTab = activeTab || (
     location.pathname === '/admin/tamu' ? 'tamu' :
-    location.pathname === '/admin/tujuan' ? 'tujuan' :
-    location.pathname === '/admin/kategori-asal' ? 'kategori-asal' :
-    location.pathname === '/admin/users' ? 'users' :
-    location.pathname === '/admin/notif-bot' ? 'notif-bot' :
-    location.pathname === '/admin/log-aktivitas' ? 'log-aktivitas' :
-    location.pathname === '/admin/profile' ? 'profile' : 'dashboard'
+      location.pathname === '/admin/tujuan' ? 'tujuan' :
+        location.pathname === '/admin/kategori-asal' ? 'kategori-asal' :
+          location.pathname === '/admin/users' ? 'users' :
+            location.pathname === '/admin/notif-bot' ? 'notif-bot' :
+              location.pathname === '/admin/log-aktivitas' ? 'log-aktivitas' :
+                location.pathname === '/admin/profile' ? 'profile' : 'dashboard'
   );
 
   const handleLogout = () => {

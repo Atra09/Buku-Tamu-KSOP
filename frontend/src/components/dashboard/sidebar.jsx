@@ -24,15 +24,16 @@ const Sidebar = ({
   userRole,
   handleLogout
 }) => {
-  // Filter navigation items based on Role (USER, KOORDINATOR, SUPER USER)
+  // Filter navigation items based on Role (user, kordinator, admin)
   const filteredNavItems = navItems.filter(item => {
-    if (userRole === 'user') {
+    const r = (userRole || '').toLowerCase();
+    if (r === 'user') {
       return item.key === 'dashboard' || item.key === 'tamu';
     }
-    if (userRole === 'koordinator') {
+    if (r === 'kordinator' || r === 'koordinator') {
       return item.key === 'dashboard' || item.key === 'tamu' || item.key === 'tujuan' || item.key === 'kategori-asal' || item.key === 'log-aktivitas';
     }
-    return true; // Super User / Admin gets access to all items
+    return true; // Admin gets access to all items (including 'users')
   });
 
   const renderNavLinks = (collapsed = false) => (

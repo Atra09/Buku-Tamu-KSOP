@@ -59,6 +59,11 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
       return;
     }
 
+    if (password.trim() && password.trim().length < 6) {
+      setError('Password minimal 6 karakter');
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -84,7 +89,7 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
 
       if (res.data.success) {
         const updatedUser = res.data.user;
-        
+
         // Update local session
         const currentSessionStr = localStorage.getItem('sitamu_user');
         if (currentSessionStr) {
@@ -101,7 +106,7 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
         if (onProfileUpdated) {
           onProfileUpdated(updatedUser);
         }
-        
+
         setTimeout(() => {
           onClose();
         }, 1200);
@@ -230,7 +235,7 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Ketik password baru..."
+                placeholder="Ketik password baru (min. 6 karakter)..."
                 className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-bold"
               />
               <button
@@ -241,6 +246,7 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            <p className="text-[10px] text-slate-400 font-medium mt-1">Minimal 6 karakter</p>
           </div>
 
           {/* Role Read-only */}

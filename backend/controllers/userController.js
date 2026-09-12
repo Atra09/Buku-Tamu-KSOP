@@ -30,6 +30,13 @@ exports.createUser = async (req, res) => {
       });
     }
 
+    if (password.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password minimal 6 karakter'
+      });
+    }
+
     const existingUser = await User.findOne({ where: { username } });
     if (existingUser) {
       return res.status(400).json({
@@ -42,11 +49,17 @@ exports.createUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const allowedRoles = ['admin', 'kordinator', 'koordinator', 'user'];
+    const rawRole = role ? role.toLowerCase().trim() : 'user';
+    const finalRole = (rawRole === 'koordinator' || rawRole === 'kordinator') 
+      ? 'kordinator' 
+      : (allowedRoles.includes(rawRole) ? rawRole : 'user');
+
     const newUser = await User.create({
       username,
       password: hashedPassword,
       nama,
-      role: role || 'user'
+      role: finalRole
     });
 
     // Record Activity Log
@@ -83,10 +96,19 @@ exports.updateUser = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
     }
 
+    const allowedRoles = ['admin', 'kordinator', 'koordinator', 'user'];
     const updateData = {
-      nama: nama || user.nama,
-      role: role || user.role
+      nama: nama || user.nama
     };
+
+    if (role) {
+      const rawRole = role.toLowerCase().trim();
+      if (rawRole === 'koordinator' || rawRole === 'kordinator') {
+        updateData.role = 'kordinator';
+      } else if (allowedRoles.includes(rawRole)) {
+        updateData.role = rawRole;
+      }
+    }
 
     if (username && username !== user.username) {
       const existingUser = await User.findOne({ where: { username } });
@@ -97,6 +119,12 @@ exports.updateUser = async (req, res) => {
     }
 
     if (password && password.trim() !== '') {
+      if (password.trim().length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password minimal 6 karakter'
+        });
+      }
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(password, salt);
     }

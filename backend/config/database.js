@@ -44,7 +44,8 @@ const ensureMySQLDatabaseExists = async () => {
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;`);
     await connection.query(`USE \`${dbName}\`;`);
     try {
-      await connection.query(`ALTER TABLE \`users\` MODIFY COLUMN \`role\` VARCHAR(255) DEFAULT 'user';`);
+      await connection.query(`UPDATE \`users\` SET \`role\` = 'admin' WHERE \`role\` NOT IN ('admin', 'kordinator', 'user') OR \`role\` IS NULL;`);
+      await connection.query(`ALTER TABLE \`users\` MODIFY COLUMN \`role\` ENUM('admin', 'kordinator', 'user') NOT NULL DEFAULT 'user';`);
     } catch (e) {
       // Table may not exist yet on initial run
     }

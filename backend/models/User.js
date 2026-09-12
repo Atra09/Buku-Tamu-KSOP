@@ -21,7 +21,7 @@ const User = sequelize.define('User', {
     defaultValue: 'Administrator'
   },
   role: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM('admin', 'kordinator', 'user'),
     defaultValue: 'user'
   },
   foto: {

@@ -95,7 +95,7 @@ const ProfilePage = () => {
               <User className="w-4 h-4 text-sky-600" />
               <span>Informasi Personal</span>
             </h3>
-            
+
             <div className="space-y-3.5 text-xs">
               <div>
                 <span className="text-slate-400 font-medium block mb-1">Nama Lengkap Petugas</span>
@@ -116,7 +116,7 @@ const ProfilePage = () => {
               <Shield className="w-4 h-4 text-sky-600" />
               <span>Hak Akses & Keamanan</span>
             </h3>
-            
+
             <div className="space-y-3.5 text-xs">
               <div>
                 <span className="text-slate-400 font-medium block mb-1">Role Akun</span>

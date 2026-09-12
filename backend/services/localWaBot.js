@@ -99,6 +99,17 @@ async function connectToWhatsApp() {
         console.log(`   Nomor Terhubung: +${connectedUser.phone} (${connectedUser.name})`);
         console.log('   Notifikasi presensi tamu akan dikirim dari nomor ini.');
         console.log('======================================================\n');
+
+        try {
+          const { ActivityLog } = require('../models');
+          await ActivityLog.create({
+            user_nama: 'Admin',
+            action: 'CONNECT_WA_BOT',
+            details: `Menyambungkan WhatsApp Bot Notifikasi (+${connectedUser.phone || 'Unknown'})`
+          });
+        } catch (e) {
+          console.error('[Local WA Bot Log Error]:', e);
+        }
       }
     });
   } catch (err) {

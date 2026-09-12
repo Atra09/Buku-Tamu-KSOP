@@ -118,9 +118,30 @@ const AdminOnlyRoute = ({ children }) => {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  const role = (user.role || 'admin').toLowerCase();
-  if (role && role !== 'admin' && role !== 'superadmin' && role !== 'administrator') {
-    return <Navigate to="/buku-tamu" replace />;
+  const role = (user.role || 'user').toLowerCase();
+  if (role !== 'admin' && role !== 'superuser' && role !== 'administrator') {
+    return <Navigate to="/admin" replace />;
+  }
+  return children;
+};
+
+// Route wrapper restricted to Kordinator & Admin roles
+const KordinatorAndAdminRoute = ({ children }) => {
+  let user = null;
+  try {
+    const rawUser = localStorage.getItem('sitamu_user');
+    if (rawUser && rawUser !== 'undefined') {
+      user = JSON.parse(rawUser);
+    }
+  } catch (e) {
+    user = null;
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  const role = (user.role || 'user').toLowerCase();
+  if (role === 'user') {
+    return <Navigate to="/admin" replace />;
   }
   return children;
 };
@@ -131,114 +152,114 @@ function App() {
       <Router>
         <CameraRouteCleaner />
         <Routes>
-        {/* Entry Root Path: Directs to /buku-tamu if logged in, or /login if unauthenticated */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/buku-tamu" replace />
-            </ProtectedRoute>
-          }
-        />
+          {/* Entry Root Path: Directs to /buku-tamu if logged in, or /login if unauthenticated */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/buku-tamu" replace />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Login Page (Redirects to /buku-tamu if already logged in) */}
-        <Route
-          path="/login"
-          element={
-            <PublicOnlyRoute>
-              <LoginPage />
-            </PublicOnlyRoute>
-          }
-        />
+          {/* Login Page (Redirects to /buku-tamu if already logged in) */}
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <LoginPage />
+              </PublicOnlyRoute>
+            }
+          />
 
-        {/* Public Guest Registration Route (Form Buku Tamu Digital KSOP) */}
-        <Route
-          path="/buku-tamu"
-          element={
-            <ProtectedRoute>
-              <PublicKsop />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/registrasi"
-          element={
-            <ProtectedRoute>
-              <PublicKsop />
-            </ProtectedRoute>
-          }
-        />
+          {/* Public Guest Registration Route (Form Buku Tamu Digital KSOP) */}
+          <Route
+            path="/buku-tamu"
+            element={
+              <ProtectedRoute>
+                <PublicKsop />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/registrasi"
+            element={
+              <ProtectedRoute>
+                <PublicKsop />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Admin Dashboard & Management Pages (Protected for User & Admin) */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <DashboardAdmin />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/tamu"
-          element={
-            <ProtectedRoute>
-              <DaftarKunjungan />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/tujuan"
-          element={
-            <ProtectedRoute>
-              <TujuanKunjungan />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/kategori-asal"
-          element={
-            <ProtectedRoute>
-              <KategoriAsal />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/users"
-          element={
-            <ProtectedRoute>
-              <UserManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/log-aktivitas"
-          element={
-            <ProtectedRoute>
-              <ActivityLogPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/notif-bot"
-          element={
-            <AdminOnlyRoute>
-              <NotifBot />
-            </AdminOnlyRoute>
-          }
-        />
-        {/* Fallback Wildcard Route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
-  </ErrorBoundary>
+          {/* Admin Dashboard & Management Pages (Protected for User & Admin) */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <DashboardAdmin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/tamu"
+            element={
+              <ProtectedRoute>
+                <DaftarKunjungan />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/tujuan"
+            element={
+              <KordinatorAndAdminRoute>
+                <TujuanKunjungan />
+              </KordinatorAndAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/kategori-asal"
+            element={
+              <KordinatorAndAdminRoute>
+                <KategoriAsal />
+              </KordinatorAndAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminOnlyRoute>
+                <UserManagement />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/admin/log-aktivitas"
+            element={
+              <KordinatorAndAdminRoute>
+                <ActivityLogPage />
+              </KordinatorAndAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/notif-bot"
+            element={
+              <AdminOnlyRoute>
+                <NotifBot />
+              </AdminOnlyRoute>
+            }
+          />
+          {/* Fallback Wildcard Route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

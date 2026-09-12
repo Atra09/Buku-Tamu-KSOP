@@ -126,50 +126,100 @@ exports.updateProfile = async (req, res) => {
 
     // Update password if provided
     if (password && password.trim() !== '') {
+      if (password.trim().length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password minimal 6 karakter'
+        });
+      }
       user.password = await bcrypt.hash(password, 10);
     }
 
     // Helper untuk hapus file foto profil lama secara fisik
+    const cleanUser = user.username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_');
     const oldFoto = user.foto;
-    const deleteOldProfilePhoto = (fotoPathStr) => {
-      if (!fotoPathStr || typeof fotoPathStr !== 'string') return;
-      const fs = require('fs');
-      const path = require('path');
+    const path = require('path');
+    const fs = require('fs');
+
+    const cleanupOldProfilePhotos = (targetUsername, currentFotoUrl, newFileName) => {
+      const profilDir = path.resolve(__dirname, '../../frontend/public/profil');
+
       try {
-        let targetFilePath = null;
-        if (fotoPathStr.startsWith('/profil/')) {
-          targetFilePath = path.resolve(__dirname, '../../frontend/public/profil', fotoPathStr.replace('/profil/', ''));
-        } else if (fotoPathStr.startsWith('/uploads/')) {
-          targetFilePath = path.resolve(__dirname, '../public/uploads', fotoPathStr.replace('/uploads/', ''));
+        if (fs.existsSync(profilDir)) {
+          const files = fs.readdirSync(profilDir);
+          files.forEach(file => {
+            if (file === '.gitkeep') return;
+            if (newFileName && file === newFileName) return;
+
+            const lowerFile = file.toLowerCase();
+            // Delete files matching user name OR legacy profile_* files
+            if (
+              lowerFile.startsWith('profile_') ||
+              (cleanUser && (lowerFile.startsWith(`${cleanUser}.`) || lowerFile.startsWith(`${cleanUser}_`)))
+            ) {
+              try {
+                fs.unlinkSync(path.join(profilDir, file));
+                console.log('[Auth Cleanup] Deleted old profile file:', file);
+              } catch (e) {}
+            }
+          });
         }
 
-        if (targetFilePath && fs.existsSync(targetFilePath)) {
-          fs.unlinkSync(targetFilePath);
-          console.log('[Auth] Foto profil lama berhasil dihapus:', targetFilePath);
+        if (currentFotoUrl && typeof currentFotoUrl === 'string') {
+          const cleanPath = currentFotoUrl.split('?')[0];
+          if (cleanPath.startsWith('/profil/')) {
+            const fileNameOnly = cleanPath.replace('/profil/', '');
+            if (fileNameOnly !== newFileName) {
+              const targetPath = path.join(profilDir, fileNameOnly);
+              if (fs.existsSync(targetPath)) {
+                try {
+                  fs.unlinkSync(targetPath);
+                  console.log('[Auth Cleanup] Deleted old photo file:', targetPath);
+                } catch (e) {}
+              }
+            }
+          }
         }
       } catch (err) {
-        console.error('[Auth] Gagal menghapus foto profil lama:', err.message);
+        console.error('[Auth Cleanup Error]:', err.message);
       }
     };
 
     // Handle foto file upload (Multer) or base64 string
     if (req.file) {
-      deleteOldProfilePhoto(oldFoto);
-      user.foto = `/profil/${req.file.filename}`;
+      const ext = path.extname(req.file.filename).toLowerCase() || '.png';
+      const targetFilename = `${cleanUser}${ext}`;
+      const profilDir = path.resolve(__dirname, '../../frontend/public/profil');
+      const finalFilePath = path.join(profilDir, targetFilename);
+
+      if (req.file.filename !== targetFilename) {
+        const tempPath = req.file.path;
+        if (fs.existsSync(tempPath)) {
+          if (fs.existsSync(finalFilePath)) {
+            try { fs.unlinkSync(finalFilePath); } catch (e) {}
+          }
+          try {
+            fs.renameSync(tempPath, finalFilePath);
+          } catch (renErr) {
+            console.error('Rename profile file failed, fallback copying:', renErr.message);
+          }
+        }
+      }
+
+      cleanupOldProfilePhotos(user.username, oldFoto, targetFilename);
+      user.foto = `/profil/${targetFilename}?v=${Date.now()}`;
     } else if (req.body.foto && req.body.foto.startsWith('data:image')) {
-      deleteOldProfilePhoto(oldFoto);
       try {
-        const path = require('path');
-        const fs = require('fs');
         const base64Data = req.body.foto.replace(/^data:image\/\w+;base64,/, '');
-        const filename = `profile_${user.id}_${Date.now()}.png`;
+        const filename = `${cleanUser}.png`;
+        cleanupOldProfilePhotos(user.username, oldFoto, filename);
         const uploadDir = path.resolve(__dirname, '../../frontend/public/profil');
         if (!fs.existsSync(uploadDir)) {
           fs.mkdirSync(uploadDir, { recursive: true });
         }
         const uploadPath = path.join(uploadDir, filename);
         fs.writeFileSync(uploadPath, base64Data, 'base64');
-        user.foto = `/profil/${filename}`;
+        user.foto = `/profil/${filename}?v=${Date.now()}`;
       } catch (err) {
         console.error('Error saving base64 profile image:', err);
       }

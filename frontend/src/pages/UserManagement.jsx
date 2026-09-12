@@ -8,7 +8,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Toast state
   const [toast, setToast] = useState(null);
 
@@ -61,11 +61,12 @@ const UserManagement = () => {
 
   const openEditModal = (user) => {
     setEditingUser(user);
+    const r = (user.role || '').toLowerCase();
     setFormData({
       username: user.username,
       password: '', // Kosong jika tidak ingin ubah password
       nama: user.nama,
-      role: user.role
+      role: (r === 'koordinator' || r === 'kordinator') ? 'kordinator' : r
     });
     setFormError('');
     setIsModalOpen(true);
@@ -77,9 +78,16 @@ const UserManagement = () => {
       setFormError('Username dan Nama wajib diisi!');
       return;
     }
-    if (!editingUser && !formData.password.trim()) {
-      setFormError('Password wajib diisi untuk user baru!');
-      return;
+    if (!editingUser) {
+      if (!formData.password || formData.password.trim().length < 6) {
+        setFormError('Password wajib diisi minimal 6 karakter!');
+        return;
+      }
+    } else {
+      if (formData.password.trim() && formData.password.trim().length < 6) {
+        setFormError('Password minimal 6 karakter!');
+        return;
+      }
     }
 
     try {
@@ -125,15 +133,15 @@ const UserManagement = () => {
     }
   };
 
-  const filteredUsers = users.filter(u => 
+  const filteredUsers = users.filter(u =>
     u.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <AdminLayout 
-      title="Kelola Akun User" 
+    <AdminLayout
+      title="Kelola Akun User"
       subtitle="Manajemen Pengguna & Hak Akses Pengelola Si-Tamu"
       activeTab="users"
     >
@@ -188,13 +196,12 @@ const UserManagement = () => {
                     <td className="py-4 px-6 font-bold text-slate-900">{u.nama}</td>
                     <td className="py-4 px-6 font-mono text-slate-600">@{u.username}</td>
                     <td className="py-4 px-6 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase ${
-                        u.role === 'admin' || u.role === 'superuser' || u.role === 'super user'
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase ${u.role === 'admin' || u.role === 'superuser' || u.role === 'super user'
                           ? 'bg-rose-50 text-rose-600 border border-rose-200/60'
                           : u.role === 'koordinator'
-                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
-                          : 'bg-sky-50 text-sky-600 border border-sky-200/60'
-                      }`}>
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
+                            : 'bg-sky-50 text-sky-600 border border-sky-200/60'
+                        }`}>
                         <Shield className="w-3 h-3" />
                         {u.role === 'admin' ? 'SUPER USER' : u.role.toUpperCase()}
                       </span>
@@ -286,12 +293,13 @@ const UserManagement = () => {
                   <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="password"
-                    placeholder={editingUser ? 'Masukkan password baru...' : 'Masukkan password...'}
+                    placeholder={editingUser ? 'Masukkan password baru (min. 6 karakter)...' : 'Masukkan password (min. 6 karakter)...'}
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                   />
                 </div>
+                <p className="text-[10px] text-slate-400 font-medium mt-1">Minimal 6 karakter</p>
               </div>
 
               <div>
@@ -302,7 +310,7 @@ const UserManagement = () => {
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-bold"
                 >
                   <option value="user">USER (Akses Dashboard & Daftar Kunjungan)</option>
-                  <option value="koordinator">KOORDINATOR (Akses Dashboard, Daftar Kunjungan, Master Data & Log Aktivitas)</option>
+                  <option value="kordinator">KOORDINATOR (Akses Dashboard, Daftar Kunjungan, Master Data & Log Aktivitas)</option>
                   <option value="admin">SUPER USER (Akses Penuh Semua Modul & Kelola User)</option>
                 </select>
               </div>

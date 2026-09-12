@@ -7,6 +7,7 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import MonthlyBarChart from '../components/dashboard/MonthlyBarChart';
 import CategoryDoughnutChart from '../components/dashboard/CategoryDoughnutChart';
+import Search from '../components/search';
 
 const DashboardAdmin = () => {
   const [stats, setStats] = useState({
@@ -20,6 +21,7 @@ const DashboardAdmin = () => {
   });
 
   const [recentGuests, setRecentGuests] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,7 +43,7 @@ const DashboardAdmin = () => {
   const fetchRecentGuests = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/tamu', { params: { limit: 5 } });
+      const res = await axios.get('/api/tamu', { params: { limit: 50 } });
       if (res.data && res.data.success) {
         setRecentGuests(res.data.data);
       }
@@ -51,6 +53,22 @@ const DashboardAdmin = () => {
       setLoading(false);
     }
   };
+
+  const filteredGuests = recentGuests.filter((g) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      (g.no_reg && g.no_reg.toLowerCase().includes(q)) ||
+      (g.nama && g.nama.toLowerCase().includes(q)) ||
+      (g.asal_instansi && g.asal_instansi.toLowerCase().includes(q)) ||
+      (g.bertemu && g.bertemu.toLowerCase().includes(q)) ||
+      (g.tanggal && g.tanggal.toLowerCase().includes(q)) ||
+      (g.jam && g.jam.toLowerCase().includes(q)) ||
+      (g.tanggal_keluar && g.tanggal_keluar.toLowerCase().includes(q)) ||
+      (g.jam_keluar && g.jam_keluar.toLowerCase().includes(q)) ||
+      (g.status && g.status.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <AdminLayout
@@ -119,24 +137,32 @@ const DashboardAdmin = () => {
 
       {/* 2. Quick Recent Guests Widget */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h3 className="font-black text-slate-800 text-base">Ringkasan Kunjungan Terkini</h3>
-            <p className="text-xs text-slate-500 font-medium">Monitoring 5 aktivitas pendaftaran tamu paling baru</p>
+            <p className="text-xs text-slate-500 font-medium">Monitoring aktivitas pendaftaran tamu paling baru</p>
           </div>
-          <Link
-            to="/admin/tamu"
-            className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
-          >
-            Lihat Semua di Daftar Kunjungan
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <Search
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Cari data di tabel..."
+              className="w-full sm:w-64"
+            />
+            <Link
+              to="/admin/tamu"
+              className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              Lihat Semua di Daftar Kunjungan
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-200">
+        <div className="overflow-x-auto max-h-[300px] overflow-y-auto rounded-xl border border-slate-100 no-scrollbar">
+          <table className="w-full text-left text-xs relative">
+            <thead className="sticky top-0 bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-200 z-10 shadow-2xs">
+              <tr>
                 <th className="p-3">No. Reg</th>
                 <th className="p-3">Nama Tamu</th>
                 <th className="p-3">Asal Instansi</th>
@@ -146,21 +172,21 @@ const DashboardAdmin = () => {
                 <th className="p-3 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
+            <tbody className="divide-y divide-slate-100 font-medium bg-white">
               {loading ? (
                 <tr>
                   <td colSpan="7" className="text-center py-6 text-slate-400 font-semibold">
                     Memuat ringkasan data tamu...
                   </td>
                 </tr>
-              ) : recentGuests.length === 0 ? (
+              ) : filteredGuests.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="text-center py-6 text-slate-400 font-semibold">
-                    Belum ada data kunjungan tamu.
+                    {searchQuery ? `Tidak ada data yang cocok dengan "${searchQuery}"` : 'Belum ada data kunjungan tamu.'}
                   </td>
                 </tr>
               ) : (
-                recentGuests.slice(0, 5).map((g) => (
+                filteredGuests.map((g) => (
                   <tr key={g.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3 font-extrabold text-blue-600">{g.no_reg}</td>
                     <td className="p-3 font-bold text-slate-800">{g.nama}</td>

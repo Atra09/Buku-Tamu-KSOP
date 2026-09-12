@@ -42,8 +42,10 @@ const profilStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.png';
-    cb(null, `profile_${Date.now()}${ext}`);
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    const rawUsername = req.body?.username || req.body?.currentUsername || 'user';
+    const cleanUsername = rawUsername.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_');
+    cb(null, `${cleanUsername}${ext}`);
   }
 });
 
@@ -91,7 +93,29 @@ router.get('/wa-bot/status', (req, res) => {
 });
 
 router.post('/wa-bot/disconnect', async (req, res) => {
+  const ActivityLog = require('../models/ActivityLog');
   const result = await localWaBot.disconnectWhatsApp();
+
+  let actorNama = 'Admin';
+  let user_id = null;
+  if (req.user) {
+    actorNama = req.user.nama || req.user.username || 'Admin';
+    user_id = req.user.id || null;
+  } else if (req.headers['x-user-nama']) {
+    actorNama = decodeURIComponent(req.headers['x-user-nama']);
+  }
+
+  try {
+    await ActivityLog.create({
+      user_nama: actorNama,
+      user_id,
+      action: 'DISCONNECT_WA_BOT',
+      details: 'Memutuskan koneksi WhatsApp Bot Notifikasi'
+    });
+  } catch (e) {
+    console.error('Error logging WA Bot disconnect:', e);
+  }
+
   res.json(result);
 });
 
