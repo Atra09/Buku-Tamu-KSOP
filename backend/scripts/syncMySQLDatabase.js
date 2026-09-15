@@ -1,9 +1,13 @@
 const { sequelize, Tamu, MasterTujuan, MasterKategoriAsal, User, seedInitialData } = require('../models');
+const { ensureMySQLDatabaseExists } = require('../config/database');
 
 const syncAndLinkDB = async () => {
   try {
     console.log('🔄 Memulai sinkronisasi tabel & FK constraint pada MySQL (db_bukutamu)...');
     
+    // Ensure database and cleanup duplicate indexes if accumulated
+    await ensureMySQLDatabaseExists();
+
     // Drop obsolete master_keperluan table if exists
     try {
       await sequelize.query('DROP TABLE IF EXISTS `master_keperluan`;');
@@ -12,9 +16,9 @@ const syncAndLinkDB = async () => {
       // Ignore if table doesn't exist
     }
 
-    // 1. Sync all models with ALTER TRUE to ensure PK & FK columns exist
-    await sequelize.sync({ alter: true });
-    console.log('✅ Sequelize sync alter true berhasil.');
+    // 1. Sync all models
+    await sequelize.sync();
+    console.log('✅ Sequelize sync berhasil.');
 
     // 2. Ensure default initial data
     await seedInitialData();

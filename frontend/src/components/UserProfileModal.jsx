@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Camera, User, Key, Shield, Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
+import { X, Camera, User, Key, Shield, Eye, EyeOff, Check, AlertCircle, Lock } from 'lucide-react';
 
 const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
   const [nama, setNama] = useState('');
@@ -15,6 +15,9 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
   const [successMsg, setSuccessMsg] = useState('');
 
   const fileInputRef = useRef(null);
+
+  const roleStr = (user?.role || '').toLowerCase();
+  const isAdmin = roleStr === 'admin' || roleStr === 'superuser' || roleStr === 'super user';
 
   useEffect(() => {
     if (user) {
@@ -197,30 +200,56 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
 
           {/* Nama Lengkap Input */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Nama Lengkap</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">Nama Lengkap</label>
+              {!isAdmin && (
+                <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-amber-600" /> Dikunci (Hanya Admin)
+                </span>
+              )}
+            </div>
             <div className="relative">
               <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 required
+                disabled={!isAdmin}
+                readOnly={!isAdmin}
                 value={nama}
                 onChange={(e) => setNama(e.target.value)}
                 placeholder="Masukkan nama lengkap Anda..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-bold"
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  !isAdmin
+                    ? 'bg-slate-100/90 text-slate-500 border border-slate-200 cursor-not-allowed select-none'
+                    : 'bg-slate-50 border border-slate-200 text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'
+                }`}
               />
             </div>
           </div>
 
           {/* Username Input */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Username</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">Username</label>
+              {!isAdmin && (
+                <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-amber-600" /> Dikunci (Hanya Admin)
+                </span>
+              )}
+            </div>
             <input
               type="text"
               required
+              disabled={!isAdmin}
+              readOnly={!isAdmin}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Masukkan username Anda..."
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-mono font-bold"
+              className={`w-full px-4 py-2.5 rounded-xl text-xs font-mono font-bold transition-all ${
+                !isAdmin
+                  ? 'bg-slate-100/90 text-slate-500 border border-slate-200 cursor-not-allowed select-none'
+                  : 'bg-slate-50 border border-slate-200 text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'
+              }`}
             />
           </div>
 

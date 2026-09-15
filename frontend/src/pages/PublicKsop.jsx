@@ -359,7 +359,7 @@ const PublicKsop = () => {
                       rows="2"
                       value={formData.alamat}
                       onChange={handleChange}
-                      placeholder="Alamat detail instansi / kantor (opsional)"
+                      placeholder="Alamat detail instansi / kantor"
                       className="w-full text-[13px] font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
                     />
                   </div>

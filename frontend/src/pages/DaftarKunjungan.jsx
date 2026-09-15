@@ -28,7 +28,8 @@ const DaftarKunjungan = () => {
   const [selectedGuestForBadge, setSelectedGuestForBadge] = useState(null);
   const [detailGuest, setDetailGuest] = useState(null);
   const [selectedLocationMap, setSelectedLocationMap] = useState(null);
-  const [mapViewMode, setMapViewMode] = useState('k'); // 'k' = Satelit (Satellite), 'm' = Peta Jalan (Map)
+  const [mapViewMode, setMapViewMode] = useState('m'); // 'm' = Peta Jalan (Map Vector - Fast), 'k' = Satelit (Satellite)
+  const [isMapLoading, setIsMapLoading] = useState(true);
   const [guestToDelete, setGuestToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -86,10 +87,25 @@ const DaftarKunjungan = () => {
     }
   };
 
+  const getLoggedInUser = () => {
+    try {
+      const storedUser = localStorage.getItem('sitamu_user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
   const handleToggleStatus = async (id, currentStatus) => {
     const nextStatus = currentStatus === 'Berkunjung' ? 'Selesai' : 'Berkunjung';
+    const currentUser = getLoggedInUser();
+    const headers = {};
+    if (currentUser && (currentUser.nama || currentUser.username)) {
+      headers['x-user-nama'] = encodeURIComponent(currentUser.nama || currentUser.username);
+    }
+
     try {
-      await axios.patch(`/api/tamu/${id}/status`, { status: nextStatus });
+      await axios.patch(`/api/tamu/${id}/status`, { status: nextStatus }, { headers });
       showToast(`Status tamu diperbarui menjadi "${nextStatus}"`, 'success');
       fetchTamuData();
     } catch (err) {
@@ -100,9 +116,15 @@ const DaftarKunjungan = () => {
   const executeDelete = async () => {
     if (!guestToDelete) return;
     const deletedName = guestToDelete.nama;
+    const currentUser = getLoggedInUser();
+    const headers = {};
+    if (currentUser && (currentUser.nama || currentUser.username)) {
+      headers['x-user-nama'] = encodeURIComponent(currentUser.nama || currentUser.username);
+    }
+
     setDeleting(true);
     try {
-      await axios.delete(`/api/tamu/${guestToDelete.id}`);
+      await axios.delete(`/api/tamu/${guestToDelete.id}`, { headers });
       setGuestToDelete(null);
       showToast(`Data tamu "${deletedName}" berhasil dihapus`, 'success');
       fetchTamuData();
@@ -227,6 +249,28 @@ const DaftarKunjungan = () => {
   const totalPages = Math.ceil(tamuList.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedTamuList = tamuList.slice(startIndex, startIndex + itemsPerPage);
+
+  const generatePaginationItems = (current, total) => {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const items = [];
+    items.push(1);
+    if (current <= 3) {
+      items.push(2, 3);
+      items.push('...');
+      items.push(total);
+    } else if (current >= total - 2) {
+      items.push('...');
+      items.push(total - 2, total - 1, total);
+    } else {
+      items.push('...');
+      items.push(current - 1, current, current + 1);
+      items.push('...');
+      items.push(total);
+    }
+    return items;
+  };
 
   return (
     <AdminLayout
@@ -372,9 +416,13 @@ const DaftarKunjungan = () => {
                         {g.no_telpon || '-'}
                       </td>
 
-                      {/* Asal Instansi */}
+                      {/* Asal Instansi / Domisili */}
                       <td className="p-3">
-                        <div className="font-bold text-slate-800">{g.asal_instansi}</div>
+                        <div className="font-bold text-slate-800">
+                          {g.kategori_asal && g.kategori_asal.toLowerCase().includes('masyarakat')
+                            ? (g.alamat || g.asal_instansi || 'Masyarakat Umum')
+                            : (g.asal_instansi || '-')}
+                        </div>
                         <span className="text-[10px] text-sky-600 font-bold">{g.kategori_asal}</span>
                       </td>
 
@@ -426,8 +474,8 @@ const DaftarKunjungan = () => {
                         <button
                           onClick={() => handleToggleStatus(g.id, g.status)}
                           className={`px-3 py-1 rounded-full text-[11px] font-extrabold cursor-pointer transition-all shadow-xs ${g.status === 'Berkunjung'
-                              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
-                              : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
+                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
+                            : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
                             }`}
                           title="Klik untuk ubah status"
                         >
@@ -502,18 +550,27 @@ const DaftarKunjungan = () => {
 
               {/* Page Number Buttons */}
               <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${currentPage === page
+                {generatePaginationItems(currentPage, totalPages).map((item, idx) => {
+                  if (item === '...') {
+                    return (
+                      <span key={`ellipsis-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs font-bold text-slate-400 select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={item}
+                      onClick={() => setCurrentPage(item)}
+                      className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${currentPage === item
                         ? 'bg-sky-600 text-white shadow-xs shadow-sky-600/30'
                         : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                      }`}
-                  >
-                    {page}
-                  </button>
-                ))}
+                        }`}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
               </div>
 
               <button
@@ -680,7 +737,7 @@ const DaftarKunjungan = () => {
         return (
           <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 backdrop-blur-xs animate-fadeIn">
             <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 space-y-0 transform transition-all">
-              
+
               {/* Modal Header */}
               <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 p-4 px-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-3">
@@ -689,7 +746,7 @@ const DaftarKunjungan = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-black text-base tracking-wide text-white">Peta Lokasi Presensi Tamu (Real-Time GPS)</h3>
+                      <h3 className="font-black text-base tracking-wide text-white">Peta Lokasi Submit Tamu (Real-Time GPS)</h3>
                       <span className="bg-sky-500/20 text-sky-300 font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-sky-500/30">
                         {selectedLocationMap.no_reg}
                       </span>
@@ -707,8 +764,8 @@ const DaftarKunjungan = () => {
                       type="button"
                       onClick={() => setMapViewMode('k')}
                       className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${mapViewMode === 'k'
-                          ? 'bg-sky-500 text-white shadow-xs'
-                          : 'text-slate-400 hover:text-white'
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
                         }`}
                       title="Tampilan Foto Satelit / Udara"
                     >
@@ -718,8 +775,8 @@ const DaftarKunjungan = () => {
                       type="button"
                       onClick={() => setMapViewMode('m')}
                       className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${mapViewMode === 'm'
-                          ? 'bg-sky-500 text-white shadow-xs'
-                          : 'text-slate-400 hover:text-white'
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
                         }`}
                       title="Tampilan Peta Vektor Jalan"
                     >
@@ -738,22 +795,32 @@ const DaftarKunjungan = () => {
               </div>
 
               {/* Modal Body: Spacious Interactive Map iframe */}
-              <div className="relative w-full bg-slate-900 h-[380px] sm:h-[430px]">
+              <div className="relative w-full bg-slate-100 h-[380px] sm:h-[430px] flex items-center justify-center overflow-hidden">
                 {!isNotDetected ? (
-                  <iframe
-                    title="Maps Preview Presensi Tamu"
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    scrolling="no"
-                    marginHeight="0"
-                    marginWidth="0"
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=${mapViewMode}&z=16&ie=UTF8&iwloc=&output=embed`}
-                    className="w-full h-full border-0"
-                    loading="lazy"
-                  ></iframe>
+                  <>
+                    {isMapLoading && (
+                      <div className="absolute inset-0 z-10 bg-slate-100 flex flex-col items-center justify-center text-slate-500 gap-2">
+                        <div className="w-9 h-9 border-3 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs font-extrabold text-slate-700">Memuat Peta Lokasi GPS...</span>
+                        <span className="text-[11px] text-slate-400">Menghubungkan ke Google Maps</span>
+                      </div>
+                    )}
+                    <iframe
+                      title="Maps Preview Presensi Tamu"
+                      width="100%"
+                      height="100%"
+                      frameBorder="0"
+                      scrolling="no"
+                      marginHeight="0"
+                      marginWidth="0"
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=${mapViewMode}&z=16&ie=UTF8&iwloc=&output=embed`}
+                      className="w-full h-full border-0 relative z-0"
+                      loading="eager"
+                      onLoad={() => setIsMapLoading(false)}
+                    ></iframe>
+                  </>
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 space-y-2 p-6 text-center">
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 space-y-2 p-6 text-center bg-slate-900">
                     <MapPin className="w-12 h-12 text-slate-300 animate-bounce" />
                     <p className="font-extrabold text-sm text-slate-200">Alamat Lokasi Tidak Terdeteksi</p>
                     <p className="text-xs text-slate-400 max-w-sm">Tamu mendaftar tanpa izin akses lokasi GPS pada perangkatnya.</p>

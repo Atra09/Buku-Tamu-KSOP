@@ -7,22 +7,31 @@ const CategoryDoughnutChart = ({ categoryStats = [], data = [], datas = [] }) =>
     ? categoryStats
     : ((Array.isArray(datas) && datas.length > 0) ? datas : (Array.isArray(data) && data.length > 0 ? data : []));
 
-  const seriesData = inputList.length > 0
-    ? inputList.map(d => (typeof d.value === 'number' ? d.value : (d.count || d.jumlah || 0)))
-    : [0];
+  const totalGuests = inputList.reduce(
+    (acc, curr) => acc + (typeof curr.value === 'number' ? curr.value : (curr.count || curr.jumlah || 0)),
+    0
+  );
 
-  const seriesLabels = inputList.length > 0
+  const hasData = inputList.length > 0 && totalGuests > 0;
+
+  const seriesData = hasData
+    ? inputList.map(d => (typeof d.value === 'number' ? d.value : (d.count || d.jumlah || 0)))
+    : [1];
+
+  const seriesLabels = hasData
     ? inputList.map(d => d.label || d.name || d.kategori || d.kategori_asal || 'Kategori')
     : ['Belum Ada Data'];
 
-  const totalGuests = seriesData.reduce((acc, curr) => acc + curr, 0);
+  const chartColors = hasData
+    ? ['#0284C7', '#059669', '#D97706', '#8B5CF6', '#6366F1', '#EC4899', '#F59E0B', '#10B981']
+    : ['#E2E8F0'];
 
   const options = {
     chart: {
       type: 'donut',
       fontFamily: 'Inter, sans-serif'
     },
-    colors: ['#0284C7', '#059669', '#D97706', '#8B5CF6', '#6366F1', '#EC4899'],
+    colors: chartColors,
     labels: seriesLabels,
     legend: {
       position: 'bottom',
@@ -61,6 +70,7 @@ const CategoryDoughnutChart = ({ categoryStats = [], data = [], datas = [] }) =>
       colors: ['#FFFFFF']
     },
     tooltip: {
+      enabled: hasData,
       y: {
         formatter: (val) => `${val} Tamu`
       }

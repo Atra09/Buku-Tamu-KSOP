@@ -23,9 +23,9 @@ frontend/.env
 .env.local
 .env.*.local
 
-# WhatsApp Bot Session Credentials (Baileys)
-backend/auth_info_baileys/*
-!backend/auth_info_baileys/.gitkeep
+# # WhatsApp Bot Session Credentials (Baileys)
+# backend/auth_info_baileys/*
+# !backend/auth_info_baileys/.gitkeep
 
 # IDE & OS Files
 .DS_Store

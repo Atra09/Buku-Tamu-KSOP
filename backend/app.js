@@ -16,8 +16,9 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 const fs = require('fs');
 
-// Serve static uploads & profil
+// Serve static uploads & profil (Check backend public and frontend public)
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use('/profil', express.static(path.join(__dirname, 'public/profil')));
 app.use('/profil', express.static(path.join(__dirname, '../frontend/public/profil')));
 
 // Serve frontend production build (dist) if available
@@ -51,7 +52,7 @@ const localWaBot = require('./services/localWaBot');
 const startDatabase = async () => {
   try {
     await ensureMySQLDatabaseExists();
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('Database db_bukutamu synced successfully');
     await seedInitialData();
 

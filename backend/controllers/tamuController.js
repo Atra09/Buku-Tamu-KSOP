@@ -1,17 +1,62 @@
-const { Tamu, MasterTujuan, MasterKategoriAsal, ActivityLog } = require('../models');
+const { Tamu, MasterTujuan, MasterKategoriAsal, ActivityLog, User } = require('../models');
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const waService = require('../services/waService');
 const localWaBot = require('../services/localWaBot');
 
+// Helper to resolve actor info and user_id for activity logging
+const resolveActor = async (req) => {
+  let actorNama = 'Admin';
+  let userId = null;
+
+  if (req.user) {
+    actorNama = req.user.nama || req.user.username || 'Admin';
+    userId = req.user.id || null;
+  } else if (req.headers['x-user-nama']) {
+    actorNama = decodeURIComponent(req.headers['x-user-nama']);
+    try {
+      const matched = await User.findOne({
+        where: {
+          [Op.or]: [
+            { nama: actorNama },
+            { username: actorNama }
+          ]
+        }
+      });
+      if (matched) {
+        userId = matched.id;
+      }
+    } catch (e) {}
+  }
+
+  return { actorNama, userId };
+};
+
+// Helper for explicit Asia/Jakarta (WIB UTC+7) date & time strings
+const getWIBNow = (d = new Date()) => {
+  const tanggal = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  const jam = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
+  const [year, month, day] = tanggal.split('-');
+  const [hh, min, ss] = jam.split(':');
+
+  return {
+    tanggal,
+    jam,
+    year,
+    month,
+    day,
+    dateStr: `${year}${month}${day}`,
+    yy: year.slice(-2),
+    hh,
+    min,
+    ss
+  };
+};
+
 // Helper to generate registration number e.g. REG-20260907-0001 (Unique & Incremental)
 const generateNoReg = async () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const dateStr = `${year}${month}${day}`;
+  const { dateStr } = getWIBNow();
 
   const lastGuest = await Tamu.findOne({
     where: {
@@ -76,8 +121,9 @@ exports.getAllTamu = async (req, res) => {
       if (g.status === 'Selesai' && !g.tanggal_keluar && g.updatedAt) {
         try {
           const updatedDate = new Date(g.updatedAt);
-          g.tanggal_keluar = updatedDate.toISOString().split('T')[0];
-          g.jam_keluar = updatedDate.toTimeString().split(' ')[0];
+          const wib = getWIBNow(updatedDate);
+          g.tanggal_keluar = wib.tanggal;
+          g.jam_keluar = wib.jam;
         } catch (e) {}
       }
       return g;
@@ -113,15 +159,6 @@ exports.getTamuById = async (req, res) => {
 // Register new guest (Form registration)
 exports.createTamu = async (req, res) => {
   try {
-    // Validate WA Bot status BEFORE creating guest record
-    const botStatus = localWaBot.getBotStatus();
-    if (!botStatus || !botStatus.isConnected) {
-      return res.status(400).json({
-        success: false,
-        botNotConnected: true,
-        message: 'bot belum terhubung, silahkan hubungi admin !!'
-      });
-    }
     const {
       nama,
       no_telpon,
@@ -147,10 +184,20 @@ exports.createTamu = async (req, res) => {
       });
     }
 
+    // 1. Verifikasi koneksi WA Bot. Pendaftaran dibatalkan jika WA Bot tidak aktif.
+    const botStatus = localWaBot.getBotStatus();
+    if (!botStatus.isConnected) {
+      return res.status(400).json({
+        success: false,
+        botNotConnected: true,
+        message: 'bot belum terhubung, silahkan hubungi admin !!'
+      });
+    }
+
     const no_reg = await generateNoReg();
-    const now = new Date();
-    const tanggal = now.toISOString().split('T')[0];
-    const jam = now.toTimeString().split(' ')[0];
+    const wibNow = getWIBNow();
+    const tanggal = wibNow.tanggal;
+    const jam = wibNow.jam;
 
     let fotoPath = null;
 
@@ -166,15 +213,7 @@ exports.createTamu = async (req, res) => {
         }
         
         const buffer = Buffer.from(base64Data, 'base64');
-        const now = new Date();
-        const yy = String(now.getFullYear()).slice(-2);
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        const hh = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-        const ss = String(now.getSeconds()).padStart(2, '0');
-        
-        const fileName = `${yy}-${mm}-${dd}_${hh}.${min}.${ss}.jpg`;
+        const fileName = `${wibNow.yy}-${wibNow.month}-${wibNow.day}_${wibNow.hh}.${wibNow.min}.${wibNow.ss}.jpg`;
         const uploadDir = path.resolve(__dirname, '../public/uploads');
 
         if (!fs.existsSync(uploadDir)) {
@@ -195,8 +234,36 @@ exports.createTamu = async (req, res) => {
       : defaultFallbackLokasi;
 
     // Resolve FK IDs for MySQL relational integrity
-    const matchedTujuan = await MasterTujuan.findOne({ where: { nama_tujuan: bertemu } });
-    const matchedKategori = await MasterKategoriAsal.findOne({ where: { nama_kategori: kategori_asal } });
+    let matchedTujuan = null;
+    let matchedKategori = null;
+    const cleanBertemu = (bertemu || '').trim();
+    const cleanKategori = (kategori_asal || '').trim();
+
+    try {
+      matchedTujuan = await MasterTujuan.findOne({
+        where: { nama_tujuan: cleanBertemu },
+        attributes: ['id', 'nama_tujuan', 'nama_pejabat', 'no_hp']
+      });
+      if (!matchedTujuan) {
+        const allTujuan = await MasterTujuan.findAll({ attributes: ['id', 'nama_tujuan', 'nama_pejabat', 'no_hp'] });
+        matchedTujuan = allTujuan.find(t => t.nama_tujuan && t.nama_tujuan.trim().toLowerCase() === cleanBertemu.toLowerCase()) || null;
+      }
+    } catch (e) {
+      console.warn('[CreateTamu Warning] Could not resolve MasterTujuan FK:', e.message);
+    }
+
+    try {
+      matchedKategori = await MasterKategoriAsal.findOne({
+        where: { nama_kategori: cleanKategori },
+        attributes: ['id', 'nama_kategori', 'butuh_instansi']
+      });
+      if (!matchedKategori) {
+        const allKategori = await MasterKategoriAsal.findAll({ attributes: ['id', 'nama_kategori', 'butuh_instansi'] });
+        matchedKategori = allKategori.find(k => k.nama_kategori && k.nama_kategori.trim().toLowerCase() === cleanKategori.toLowerCase()) || null;
+      }
+    } catch (e) {
+      console.warn('[CreateTamu Warning] Could not resolve MasterKategoriAsal FK:', e.message);
+    }
 
     const newTamu = await Tamu.create({
       no_reg,
@@ -219,11 +286,14 @@ exports.createTamu = async (req, res) => {
 
     // Kirim notifikasi WA secara otomatis di latar belakang jika pejabat tujuan memiliki kontak HP
     if (matchedTujuan && matchedTujuan.no_hp) {
+      console.log(`[WA Bot Trigger] Mengirim notifikasi WA ke: ${matchedTujuan.nama_pejabat || matchedTujuan.nama_tujuan} (${matchedTujuan.no_hp})`);
       waService.sendWANotification({
         targetNoHp: matchedTujuan.no_hp,
         namaPejabat: matchedTujuan.nama_pejabat,
         guest: newTamu.toJSON()
       }).catch(waErr => console.error('Error sending WA notification background:', waErr));
+    } else {
+      console.log(`[WA Bot Skip] Tujuan: "${bertemu}". Matched: ${!!matchedTujuan}, No HP: ${matchedTujuan ? matchedTujuan.no_hp : 'N/A'}`);
     }
 
     // Record Activity Log
@@ -271,9 +341,9 @@ exports.updateStatus = async (req, res) => {
     tamu.status = nextStatus;
 
     if (nextStatus === 'Selesai') {
-      const now = new Date();
-      tamu.tanggal_keluar = now.toISOString().split('T')[0];
-      tamu.jam_keluar = now.toTimeString().split(' ')[0];
+      const wibNow = getWIBNow();
+      tamu.tanggal_keluar = wibNow.tanggal;
+      tamu.jam_keluar = wibNow.jam;
     } else {
       tamu.tanggal_keluar = null;
       tamu.jam_keluar = null;
@@ -283,16 +353,11 @@ exports.updateStatus = async (req, res) => {
 
     // Record Activity Log
     try {
-      let actorNama = 'Admin';
-      if (req.user && req.user.nama) {
-        actorNama = req.user.nama;
-      } else if (req.headers['x-user-nama']) {
-        actorNama = decodeURIComponent(req.headers['x-user-nama']);
-      }
+      const { actorNama, userId } = await resolveActor(req);
 
       await ActivityLog.create({
         user_nama: actorNama,
-        user_id: req.user ? req.user.id : null,
+        user_id: userId,
         action: 'UPDATE_STATUS_TAMU',
         details: `Mengubah status kunjungan ${tamu.nama} (${tamu.no_reg}) menjadi ${nextStatus}`
       });
@@ -335,16 +400,11 @@ exports.deleteTamu = async (req, res) => {
 
     // Record Activity Log
     try {
-      let actorNama = 'Admin';
-      if (req.user && req.user.nama) {
-        actorNama = req.user.nama;
-      } else if (req.headers['x-user-nama']) {
-        actorNama = decodeURIComponent(req.headers['x-user-nama']);
-      }
+      const { actorNama, userId } = await resolveActor(req);
 
       await ActivityLog.create({
         user_nama: actorNama,
-        user_id: req.user ? req.user.id : null,
+        user_id: userId,
         action: 'HAPUS_TAMU',
         details: `Menghapus data kunjungan tamu: ${namaDeleted} (${noRegDeleted})`
       });
@@ -358,12 +418,9 @@ exports.deleteTamu = async (req, res) => {
   }
 };
 
-// Helper for local YYYY-MM-DD string
+// Helper for local YYYY-MM-DD string in Asia/Jakarta (WIB)
 const getLocalDateString = (d = new Date()) => {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getWIBNow(d).tanggal;
 };
 
 // Get Dashboard Statistics
@@ -383,34 +440,64 @@ exports.getStats = async (req, res) => {
 
     const sedangBerkunjung = await Tamu.count({ where: { status: 'Berkunjung' } });
 
-    // 1. Distribution by category (Exact match with dropdown values)
-    const countInstansi = await Tamu.count({
-      where: {
-        kategori_asal: { [Op.or]: ['Instansi', 'Instansi / Dinas'] }
-      }
+    // 1. Distribution by category directly & dynamically from MasterKategoriAsal database table
+    const masterKategoriList = await MasterKategoriAsal.findAll({
+      order: [['id', 'ASC']]
     });
-    const countPerusahaan = await Tamu.count({
+
+    const categoryStats = [];
+    const countedCategoryIds = [];
+    const countedNames = [];
+
+    for (const kat of masterKategoriList) {
+      countedCategoryIds.push(kat.id);
+      countedNames.push(kat.nama_kategori);
+
+      const count = await Tamu.count({
+        where: {
+          [Op.or]: [
+            { kategori_asal_id: kat.id },
+            { kategori_asal: kat.nama_kategori }
+          ]
+        }
+      });
+
+      categoryStats.push({
+        id: kat.id,
+        label: kat.nama_kategori,
+        value: count
+      });
+    }
+
+    // Count leftover unmapped guests
+    const unmappedCount = await Tamu.count({
       where: {
-        kategori_asal: { [Op.or]: ['Perusahaan', 'Perusahaan / Swasta'] }
-      }
-    });
-    const countMasyarakat = await Tamu.count({
-      where: {
-        kategori_asal: { [Op.or]: ['Masyarakat', 'Masyarakat Umum'] }
-      }
-    });
-    const countLainnya = await Tamu.count({
-      where: {
-        kategori_asal: { [Op.notIn]: ['Instansi', 'Instansi / Dinas', 'Perusahaan', 'Perusahaan / Swasta', 'Masyarakat', 'Masyarakat Umum'] }
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { kategori_asal_id: null },
+              { kategori_asal_id: { [Op.notIn]: countedCategoryIds } }
+            ]
+          },
+          {
+            kategori_asal: { [Op.notIn]: countedNames }
+          }
+        ]
       }
     });
 
-    const categoryStats = [
-      { label: 'Instansi / Dinas', value: countInstansi },
-      { label: 'Perusahaan / Swasta', value: countPerusahaan },
-      { label: 'Masyarakat Umum', value: countMasyarakat },
-      { label: 'Lainnya', value: countLainnya }
-    ];
+    if (unmappedCount > 0) {
+      const existingLainnya = categoryStats.find(c => c.label.toLowerCase().includes('lainnya'));
+      if (existingLainnya) {
+        existingLainnya.value += unmappedCount;
+      } else {
+        categoryStats.push({
+          id: 0,
+          label: 'Lainnya',
+          value: unmappedCount
+        });
+      }
+    }
 
     // 2. Weekly Stats (Senin hingga Minggu dari minggu berjalan)
     const dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -467,12 +554,11 @@ exports.getStats = async (req, res) => {
         totalHariIni,
         totalBulanIni,
         sedangBerkunjung,
-        kategori: {
-          instansi: countInstansi,
-          masyarakat: countMasyarakat,
-          perusahaan: countPerusahaan,
-          lainnya: countLainnya
-        },
+        totalKategoriAsal: masterKategoriList.length,
+        kategori: categoryStats.reduce((acc, c) => {
+          acc[c.label] = c.value;
+          return acc;
+        }, {}),
         categoryStats,
         weeklyStats,
         monthlyStats

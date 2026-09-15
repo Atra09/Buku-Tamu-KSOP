@@ -1,4 +1,4 @@
-const { ActivityLog } = require('../models');
+const { ActivityLog, User } = require('../models');
 const { Op } = require('sequelize');
 
 // GET /api/logs - Get activity logs with search & pagination
@@ -17,15 +17,66 @@ exports.getActivityLogs = async (req, res) => {
 
     const { count, rows } = await ActivityLog.findAndCountAll({
       where,
+      include: [{
+        model: User,
+        attributes: ['id', 'username', 'nama', 'role'],
+        required: false
+      }],
       order: [['id', 'DESC']],
       limit: parseInt(limit),
       offset: parseInt(offset)
     });
 
+    // Fallback: Link user_nama or user_id to User model if unlinked
+    const users = await User.findAll({
+      attributes: ['id', 'username', 'nama', 'role']
+    });
+
+    const userMap = {};
+    const userById = {};
+    users.forEach(u => {
+      userById[u.id] = u;
+      if (u.nama) userMap[u.nama.toLowerCase().trim()] = u;
+      if (u.username) userMap[u.username.toLowerCase().trim()] = u;
+    });
+
+    const enrichedRows = rows.map(r => {
+      const logObj = r.toJSON();
+      const nameKey = (logObj.user_nama || '').toLowerCase().trim();
+      
+      const userFromId = logObj.user_id ? userById[logObj.user_id] : null;
+      const userFromName = userMap[nameKey];
+      const matchedUser = userFromId || userFromName || logObj.User;
+
+      let rawRole = (matchedUser?.role || logObj.User?.role || '').toLowerCase().trim();
+
+      if (rawRole.includes('kordinat') || rawRole.includes('koordinat')) {
+        rawRole = 'kordinator';
+      } else if (rawRole.includes('admin')) {
+        rawRole = 'admin';
+      } else if (rawRole) {
+        rawRole = 'user';
+      } else {
+        rawRole = null;
+      }
+
+      logObj.user_role = rawRole;
+
+      if (!logObj.User && matchedUser) {
+        logObj.User = {
+          id: matchedUser.id,
+          username: matchedUser.username,
+          nama: matchedUser.nama,
+          role: matchedUser.role
+        };
+      }
+      return logObj;
+    });
+
     res.json({
       success: true,
       total: count,
-      data: rows
+      data: enrichedRows
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

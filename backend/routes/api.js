@@ -32,25 +32,13 @@ const storage = multer.diskStorage({
   }
 });
 
-// Multer storage configuration for user profile photos (frontend/public/profil)
-const profilStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.resolve(__dirname, '../../frontend/public/profil');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    const rawUsername = req.body?.username || req.body?.currentUsername || 'user';
-    const cleanUsername = rawUsername.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_');
-    cb(null, `${cleanUsername}${ext}`);
-  }
-});
-
 const upload = multer({ storage });
-const uploadProfil = multer({ storage: profilStorage });
+
+// Multer memoryStorage configuration for user profile photos (handled cleanly in controller)
+const uploadProfil = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 // Auth Routes
 router.post('/auth/login', authController.login);

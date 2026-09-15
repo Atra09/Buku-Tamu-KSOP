@@ -26,6 +26,7 @@ const initDatabase = () => {
       host: dbHost,
       port: dbPort,
       dialect: 'mysql',
+      timezone: '+07:00',
       logging: false
     });
   }
@@ -49,6 +50,23 @@ const ensureMySQLDatabaseExists = async () => {
     } catch (e) {
       // Table may not exist yet on initial run
     }
+
+    // Clean up accumulated duplicate indexes on master_tujuan if present
+    try {
+      const [indexes] = await connection.query("SHOW INDEX FROM `master_tujuan` WHERE Key_name != 'PRIMARY'");
+      if (indexes && indexes.length > 1) {
+        const uniqueKeys = [...new Set(indexes.map(row => row.Key_name))];
+        for (let i = 1; i < uniqueKeys.length; i++) {
+          try {
+            await connection.query(`ALTER TABLE \`master_tujuan\` DROP INDEX \`${uniqueKeys[i]}\`;`);
+          } catch (dropErr) {}
+        }
+        console.log(`[DB Cleanup] Membersihkan ${uniqueKeys.length - 1} indeks duplikat pada tabel master_tujuan.`);
+      }
+    } catch (idxErr) {
+      // Table may not exist yet on initial run
+    }
+
     await connection.end();
     console.log(`Database MySQL '${dbName}' dipastikan siap/terbuat.`);
   } catch (err) {

@@ -54,7 +54,7 @@ Diberitahukan bahwa telah hadir tamu *${cleanNama}* dari *${asalStr}* pada tangg
 _Terima kasih._
 > Pesan Ini Dikirim Otomatis Oleh Web Si Tamu`;
 
-    // pengiriman via Local baileys
+    // send via local
     if (localWaBot.getBotStatus().isConnected) {
       console.log(`[Local WA Bot] Mengirim pesan otomatis ke: ${cleanNumber}...`);
       const botRes = await localWaBot.sendTextMessage(cleanNumber, waMessageText);

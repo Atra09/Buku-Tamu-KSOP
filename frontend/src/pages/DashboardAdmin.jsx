@@ -8,6 +8,7 @@ import AdminLayout from '../components/AdminLayout';
 import MonthlyBarChart from '../components/dashboard/MonthlyBarChart';
 import CategoryDoughnutChart from '../components/dashboard/CategoryDoughnutChart';
 import Search from '../components/search';
+import Flash from '../components/flash/flash';
 
 const DashboardAdmin = () => {
   const [stats, setStats] = useState({
@@ -23,6 +24,14 @@ const DashboardAdmin = () => {
   const [recentGuests, setRecentGuests] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  };
 
   useEffect(() => {
     fetchStats();
@@ -51,6 +60,26 @@ const DashboardAdmin = () => {
       console.error('Error fetching recent guests:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleStatus = async (id, currentStatus) => {
+    const nextStatus = currentStatus === 'Berkunjung' ? 'Selesai' : 'Berkunjung';
+    const userStr = localStorage.getItem('sitamu_user');
+    const userObj = userStr ? JSON.parse(userStr) : null;
+    const headers = {};
+    if (userObj && (userObj.nama || userObj.username)) {
+      headers['x-user-nama'] = encodeURIComponent(userObj.nama || userObj.username);
+    }
+
+    try {
+      await axios.patch(`/api/tamu/${id}/status`, { status: nextStatus }, { headers });
+      showToast(`Status tamu diperbarui menjadi "${nextStatus}"`, 'success');
+      fetchStats();
+      fetchRecentGuests();
+    } catch (err) {
+      console.error('Gagal memperbarui status tamu:', err);
+      showToast('Gagal memperbarui status tamu', 'error');
     }
   };
 
@@ -120,13 +149,15 @@ const DashboardAdmin = () => {
           </div>
         </div>
 
-        {/* Card 4: Category Distribution */}
+        {/* Card 4: Total Kategori Asal */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-md flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Kategori Instansi</span>
-            <h3 className="text-3xl font-black text-emerald-600 mt-1">{stats.kategori?.instansi || 0}</h3>
+            <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Kategori Asal</span>
+            <h3 className="text-3xl font-black text-emerald-600 mt-1">
+              {stats.totalKategoriAsal !== undefined ? stats.totalKategoriAsal : (stats.categoryStats?.length || 0)}
+            </h3>
             <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-              Mitra Kerja / Dinas
+              Kategori Terdaftar
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold shadow-xs">
@@ -190,7 +221,14 @@ const DashboardAdmin = () => {
                   <tr key={g.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-3 font-extrabold text-blue-600">{g.no_reg}</td>
                     <td className="p-3 font-bold text-slate-800">{g.nama}</td>
-                    <td className="p-3 text-slate-700">{g.asal_instansi}</td>
+                    <td className="p-3">
+                      <div className="font-bold text-slate-800">
+                        {g.kategori_asal && g.kategori_asal.toLowerCase().includes('masyarakat')
+                          ? (g.alamat || g.asal_instansi || 'Masyarakat Umum')
+                          : (g.asal_instansi || '-')}
+                      </div>
+                      <span className="text-[10px] text-sky-600 font-bold">{g.kategori_asal}</span>
+                    </td>
                     <td className="p-3 text-slate-700 font-medium">{g.bertemu}</td>
                     <td className="p-3 text-slate-600">
                       <div className="font-semibold text-slate-700">{g.tanggal}</div>
@@ -207,13 +245,18 @@ const DashboardAdmin = () => {
                       )}
                     </td>
                     <td className="p-3 text-center">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold border ${
-                        g.status === 'Berkunjung'
-                          ? 'bg-amber-100 text-amber-800 border-amber-200'
-                          : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                      }`}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(g.id, g.status)}
+                        className={`px-3 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all shadow-xs ${
+                          g.status === 'Berkunjung'
+                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
+                            : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
+                        }`}
+                        title="Klik untuk ubah status"
+                      >
                         {g.status}
-                      </span>
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -237,6 +280,7 @@ const DashboardAdmin = () => {
           />
         </div>
       </div>
+      <Flash toast={toast} onClose={() => setToast(null)} />
     </AdminLayout>
   );
 };

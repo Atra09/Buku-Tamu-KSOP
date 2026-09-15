@@ -7,6 +7,28 @@ const ActivityLogPage = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [userRoleMap, setUserRoleMap] = useState({});
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get('/api/users');
+      if (res.data && res.data.data) {
+        const map = {};
+        res.data.data.forEach(u => {
+          const roleStr = (u.role || '').toLowerCase().trim();
+          if (u.nama) map[u.nama.toLowerCase().trim()] = roleStr;
+          if (u.username) map[u.username.toLowerCase().trim()] = roleStr;
+        });
+        setUserRoleMap(map);
+      }
+    } catch (err) {
+      console.error('Error fetching users for role map:', err);
+    }
+  };
 
   const fetchLogs = async () => {
     try {
@@ -59,9 +81,59 @@ const ActivityLogPage = () => {
     }
   };
 
+  const getRoleAvatar = (log) => {
+    const namaClean = (log.user_nama || '').toLowerCase().trim();
+
+    // Layer 1: Check current logged-in session user
+    let sessionRole = '';
+    try {
+      const stored = localStorage.getItem('sitamu_user');
+      if (stored) {
+        const loggedUser = JSON.parse(stored);
+        const loggedNama = (loggedUser.nama || '').toLowerCase().trim();
+        const loggedUserNama = (loggedUser.username || '').toLowerCase().trim();
+        if (namaClean && (namaClean === loggedNama || namaClean === loggedUserNama)) {
+          sessionRole = (loggedUser.role || '').toLowerCase().trim();
+        }
+      }
+    } catch (e) {}
+
+    const mapRole = userRoleMap[namaClean] || '';
+    const role = (sessionRole || mapRole || log.user_role || log.User?.role || log.user?.role || '').toLowerCase().trim();
+
+    if (role === 'admin' || role === 'superuser' || role === 'super user' || namaClean.includes('admin')) {
+      return {
+        initial: 'A',
+        badge: 'bg-rose-100 text-rose-700 border-rose-200/80 shadow-xs',
+        title: 'Admin'
+      };
+    }
+
+    if (
+      role === 'kordinator' ||
+      role === 'koordinator' ||
+      role.includes('kordinat') ||
+      role.includes('koordinat') ||
+      namaClean.includes('kordinator') ||
+      namaClean.includes('koordinator')
+    ) {
+      return {
+        initial: 'K',
+        badge: 'bg-emerald-100 text-emerald-700 border-emerald-200/80 shadow-xs',
+        title: 'Koordinator'
+      };
+    }
+
+    return {
+      initial: 'S',
+      badge: 'bg-sky-100 text-sky-700 border-sky-200/80 shadow-xs',
+      title: 'User / Staff'
+    };
+  };
+
   return (
-    <AdminLayout 
-      title="Log Aktivitas Sistem" 
+    <AdminLayout
+      title="Log Aktivitas Sistem"
       subtitle="Audit Trail & Catatan Riwayat Aktivitas Pengelola Si-Tamu"
       activeTab="log-aktivitas"
     >
@@ -124,12 +196,20 @@ const ActivityLogPage = () => {
                         </div>
                       </td>
                       <td className="py-4 px-6 font-bold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-black uppercase">
-                            {log.user_nama.substring(0, 2)}
-                          </div>
-                          <span>{log.user_nama}</span>
-                        </div>
+                        {(() => {
+                          const avatar = getRoleAvatar(log);
+                          return (
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black uppercase border ${avatar.badge} shrink-0`}
+                                title={`Role: ${avatar.title}`}
+                              >
+                                {avatar.initial}
+                              </div>
+                              <span className="truncate max-w-[170px]">{log.user_nama}</span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${getActionBadge(log.action)}`}>
