@@ -107,4 +107,12 @@ router.post('/wa-bot/disconnect', async (req, res) => {
   res.json(result);
 });
 
+// WA Template Routes
+const waTemplateController = require('../controllers/waTemplateController');
+router.get('/wa-templates', waTemplateController.getTemplates);
+router.post('/wa-templates', waTemplateController.createTemplate);
+router.put('/wa-templates/:id', waTemplateController.updateTemplate);
+router.delete('/wa-templates/:id', waTemplateController.deleteTemplate);
+router.patch('/wa-templates/activate/:id', waTemplateController.setActiveTemplate);
+
 module.exports = router;

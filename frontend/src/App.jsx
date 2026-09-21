@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import PublicKsop from './pages/PublicKsop';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DaftarKunjungan from './pages/DaftarKunjungan';
@@ -70,16 +70,52 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Public Only Route Component (Redirects to /admin if already logged in)
+import { isSessionValid, updateLastActivity, clearSession, getStoredUser } from './utils/session';
+
+// Session Auto-Logout & Activity Tracker Component
+const SessionActivityTracker = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleUserActivity = () => {
+      const user = getStoredUser();
+      if (user) {
+        if (isSessionValid()) {
+          updateLastActivity();
+        } else {
+          clearSession();
+          sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
+          navigate('/login', { replace: true });
+        }
+      }
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+    const interval = setInterval(() => {
+      const user = getStoredUser();
+      if (user && !isSessionValid()) {
+        clearSession();
+        sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
+        navigate('/login', { replace: true });
+      }
+    }, 15000);
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, handleUserActivity));
+      clearInterval(interval);
+    };
+  }, [navigate]);
+
+  return null;
+};
+
+// Public Only Route Component (Redirects to /buku-tamu if already logged in with valid session)
 const PublicOnlyRoute = ({ children }) => {
   let user = null;
-  try {
-    const rawUser = localStorage.getItem('sitamu_user');
-    if (rawUser && rawUser !== 'undefined') {
-      user = JSON.parse(rawUser);
-    }
-  } catch (e) {
-    user = null;
+  if (isSessionValid()) {
+    user = getStoredUser();
   }
   if (user) {
     return <Navigate to="/buku-tamu" replace />;
@@ -89,15 +125,15 @@ const PublicOnlyRoute = ({ children }) => {
 
 // Protected Route Component for any logged in User/Admin
 const ProtectedRoute = ({ children }) => {
-  let user = null;
-  try {
-    const rawUser = localStorage.getItem('sitamu_user');
-    if (rawUser && rawUser !== 'undefined') {
-      user = JSON.parse(rawUser);
+  if (!isSessionValid()) {
+    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
+    if (rawUser) {
+      sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
     }
-  } catch (e) {
-    user = null;
+    return <Navigate to="/login" replace />;
   }
+
+  const user = getStoredUser();
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -106,15 +142,15 @@ const ProtectedRoute = ({ children }) => {
 
 // Route wrapper restricted strictly to Admin role
 const AdminOnlyRoute = ({ children }) => {
-  let user = null;
-  try {
-    const rawUser = localStorage.getItem('sitamu_user');
-    if (rawUser && rawUser !== 'undefined') {
-      user = JSON.parse(rawUser);
+  if (!isSessionValid()) {
+    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
+    if (rawUser) {
+      sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
     }
-  } catch (e) {
-    user = null;
+    return <Navigate to="/login" replace />;
   }
+
+  const user = getStoredUser();
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -127,15 +163,15 @@ const AdminOnlyRoute = ({ children }) => {
 
 // Route wrapper restricted to Kordinator & Admin roles
 const KordinatorAndAdminRoute = ({ children }) => {
-  let user = null;
-  try {
-    const rawUser = localStorage.getItem('sitamu_user');
-    if (rawUser && rawUser !== 'undefined') {
-      user = JSON.parse(rawUser);
+  if (!isSessionValid()) {
+    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
+    if (rawUser) {
+      sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
     }
-  } catch (e) {
-    user = null;
+    return <Navigate to="/login" replace />;
   }
+
+  const user = getStoredUser();
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -150,6 +186,7 @@ function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <SessionActivityTracker />
         <CameraRouteCleaner />
         <Routes>
           {/* Entry Root Path: Directs to /buku-tamu if logged in, or /login if unauthenticated */}

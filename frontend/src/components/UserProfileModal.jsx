@@ -94,15 +94,19 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
         const updatedUser = res.data.user;
 
         // Update local session
-        const currentSessionStr = localStorage.getItem('sitamu_user');
+        const currentSessionStr = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
         if (currentSessionStr) {
           try {
             const currentSession = JSON.parse(currentSessionStr);
             const mergedSession = { ...currentSession, ...updatedUser };
+            sessionStorage.setItem('sitamu_user', JSON.stringify(mergedSession));
             localStorage.setItem('sitamu_user', JSON.stringify(mergedSession));
           } catch (e) {
+            sessionStorage.setItem('sitamu_user', JSON.stringify(updatedUser));
             localStorage.setItem('sitamu_user', JSON.stringify(updatedUser));
           }
+        } else {
+          sessionStorage.setItem('sitamu_user', JSON.stringify(updatedUser));
         }
 
         setSuccessMsg('Profil berhasil diperbarui!');

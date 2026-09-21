@@ -170,7 +170,7 @@ async function disconnectWhatsApp() {
     connectToWhatsApp();
   }, 2000);
 
-  return { success: true, message: 'Bot berhasil diputuskan' };
+  return { success: true, message: 'Bot berhasil diputus' };
 }
 
 function getBotStatus() {

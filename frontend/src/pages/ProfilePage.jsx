@@ -10,7 +10,7 @@ const ProfilePage = () => {
   const [toast, setToast] = useState(null);
 
   const loadUserData = () => {
-    const storedUser = localStorage.getItem('sitamu_user');
+    const storedUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));

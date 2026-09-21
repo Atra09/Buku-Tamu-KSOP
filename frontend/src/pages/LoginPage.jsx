@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { setSessionData } from '../utils/session';
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
@@ -11,6 +12,14 @@ const LoginPage = () => {
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const expiredMsg = sessionStorage.getItem('sitamu_session_expired');
+    if (expiredMsg) {
+      setError(expiredMsg);
+      sessionStorage.removeItem('sitamu_session_expired');
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -26,9 +35,8 @@ const LoginPage = () => {
       const res = await axios.post('/api/auth/login', { username, password });
 
       if (res.data && res.data.success) {
-        // Save user & token to localStorage
-        localStorage.setItem('sitamu_token', res.data.token);
-        localStorage.setItem('sitamu_user', JSON.stringify(res.data.user));
+        // Save user & token to sessionStorage
+        setSessionData(res.data.user, res.data.token);
         sessionStorage.setItem('sitamu_login_flash', `Selamat datang, ${res.data.user?.nama || res.data.user?.username || 'User'}!`);
         
         // Navigate to Guest Registration Form (/buku-tamu)

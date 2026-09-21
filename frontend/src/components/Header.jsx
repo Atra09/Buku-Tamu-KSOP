@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, LayoutDashboard, UserCheck, ChevronDown, LogOut, User } from 'lucide-react';
 import UserProfileModal from './UserProfileModal';
 
+import { getStoredUser, clearSession } from '../utils/session';
+
 const Header = ({ companyName = "KSOP Si-Tamu" }) => {
   const [dateTime, setDateTime] = useState(new Date());
   const [user, setUser] = useState(null);
@@ -15,13 +17,9 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
     const timer = setInterval(() => setDateTime(new Date()), 1000);
     
     // Load logged in user info
-    const storedUser = localStorage.getItem('sitamu_user');
+    const storedUser = getStoredUser();
     if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (err) {
-        setUser(null);
-      }
+      setUser(storedUser);
     }
 
     return () => clearInterval(timer);
@@ -46,8 +44,7 @@ const Header = ({ companyName = "KSOP Si-Tamu" }) => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('sitamu_token');
-    localStorage.removeItem('sitamu_user');
+    clearSession();
     setDropdownOpen(false);
     navigate('/login');
   };

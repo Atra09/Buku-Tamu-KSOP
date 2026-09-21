@@ -24,7 +24,7 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
 
   let user = {};
   try {
-    const rawUser = localStorage.getItem('sitamu_user');
+    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
     if (rawUser && rawUser !== 'undefined') {
       user = JSON.parse(rawUser);
     }

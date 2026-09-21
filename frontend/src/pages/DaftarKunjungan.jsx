@@ -89,7 +89,7 @@ const DaftarKunjungan = () => {
 
   const getLoggedInUser = () => {
     try {
-      const storedUser = localStorage.getItem('sitamu_user');
+      const storedUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
       return storedUser ? JSON.parse(storedUser) : null;
     } catch (e) {
       return null;

@@ -65,7 +65,7 @@ const DashboardAdmin = () => {
 
   const handleToggleStatus = async (id, currentStatus) => {
     const nextStatus = currentStatus === 'Berkunjung' ? 'Selesai' : 'Berkunjung';
-    const userStr = localStorage.getItem('sitamu_user');
+    const userStr = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
     const userObj = userStr ? JSON.parse(userStr) : null;
     const headers = {};
     if (userObj && (userObj.nama || userObj.username)) {

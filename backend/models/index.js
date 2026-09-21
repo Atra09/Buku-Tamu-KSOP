@@ -4,6 +4,7 @@ const MasterTujuan = require('./MasterTujuan');
 const MasterKategoriAsal = require('./MasterKategoriAsal');
 const User = require('./User');
 const ActivityLog = require('./ActivityLog');
+const WaTemplate = require('./WaTemplate');
 
 // Foreign Key Associations for Relational MySQL ERD Diagram
 MasterTujuan.hasMany(Tamu, { foreignKey: 'tujuan_id' });
@@ -62,6 +63,10 @@ const ensureTableColumnsIntegrity = async () => {
       await sequelize.query("ALTER TABLE `tamu` ADD COLUMN `jam_keluar` VARCHAR(255) NULL");
       console.log('✅ Column jam_keluar added to tamu');
     }
+
+    // 4. Ensure wa_templates table exists
+    await WaTemplate.sync();
+    console.log('✅ Table wa_templates synced successfully');
   } catch (err) {
     console.error('Error ensuring table columns integrity:', err.message);
   }
@@ -142,6 +147,7 @@ module.exports = {
   MasterKategoriAsal,
   User,
   ActivityLog,
+  WaTemplate,
   seedInitialData,
   ensureTableColumnsIntegrity
 };

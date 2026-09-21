@@ -8,7 +8,7 @@ const api = axios.create({
 // Request interceptor to attach bearer token if present
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('sitamu_token');
+    const token = sessionStorage.getItem('sitamu_token') || localStorage.getItem('sitamu_token');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }

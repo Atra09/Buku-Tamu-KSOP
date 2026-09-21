@@ -43,8 +43,9 @@ exports.sendWANotification = async ({ targetNoHp, namaPejabat, guest }) => {
     // Trim spasi di awal & akhir agar format bold (*) WhatsApp tidak gagal akibat spasi tersembunyi
     const cleanKeperluan = guest.keperluan ? guest.keperluan.toString().trim() : '-';
     const cleanNama = guest.nama ? guest.nama.toString().trim() : '-';
+    const cleanNoWa = guest.no_telpon ? guest.no_telpon.toString().trim() : (guest.no_telepon ? guest.no_telepon.toString().trim() : (guest.no_hp ? guest.no_hp.toString().trim() : '-'));
 
-    const waMessageText = `🔔 *NOTIFIKASI KUNJUNGAN TAMU KSOP*
+    let waMessageText = `🔔 *NOTIFIKASI KUNJUNGAN TAMU KSOP*
 
 Yth. *${namaPejabatStr}* (${namaTujuanStr}),
 
@@ -53,6 +54,29 @@ Diberitahukan bahwa telah hadir tamu *${cleanNama}* dari *${asalStr}* pada tangg
 
 _Terima kasih._
 > Pesan Ini Dikirim Otomatis Oleh Web Si Tamu`;
+
+    // Cek apakah ada template kustom aktif di database
+    try {
+      const { WaTemplate } = require('../models');
+      const activeTemplate = await WaTemplate.findOne({ where: { is_active: true } });
+      if (activeTemplate && activeTemplate.isi_pesan) {
+        waMessageText = activeTemplate.isi_pesan
+          .replace(/{nama_pejabat}/g, namaPejabatStr)
+          .replace(/{tujuan_tamu}/g, namaTujuanStr)
+          .replace(/{nama_tujuan}/g, namaTujuanStr)
+          .replace(/{nama_tamu}/g, cleanNama)
+          .replace(/{WA_tamu}/g, cleanNoWa)
+          .replace(/{no_wa}/g, cleanNoWa)
+          .replace(/{no_telepon}/g, cleanNoWa)
+          .replace(/{no_telpon}/g, cleanNoWa)
+          .replace(/{asal_instansi}/g, asalStr)
+          .replace(/{waktu}/g, formattedWaktu)
+          .replace(/{keperluan_tamu}/g, cleanKeperluan)
+          .replace(/{keperluan}/g, cleanKeperluan);
+      }
+    } catch (errTemplate) {
+      console.error('[WA Service] Error loading custom template, fallback to default:', errTemplate.message);
+    }
 
     // send via local
     if (localWaBot.getBotStatus().isConnected) {

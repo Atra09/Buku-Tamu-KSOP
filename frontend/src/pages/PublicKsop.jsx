@@ -171,11 +171,11 @@ const PublicKsop = () => {
         foto_base64: fotoBase64
       };
 
-      const userStr = localStorage.getItem('sitamu_user');
+      const userStr = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
       const userObj = userStr ? JSON.parse(userStr) : null;
       const headers = {};
-      if (userObj && userObj.nama) {
-        headers['x-user-nama'] = encodeURIComponent(userObj.nama);
+      if (userObj && (userObj.nama || userObj.username)) {
+        headers['x-user-nama'] = encodeURIComponent(userObj.nama || userObj.username);
       }
 
       const res = await axios.post('/api/tamu', payload, { headers });

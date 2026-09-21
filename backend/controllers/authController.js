@@ -13,7 +13,28 @@ exports.login = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ where: { username } });
+    // Validasi tipe data string untuk mencegah Object / NoSQL-style Injection
+    if (typeof username !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Format username atau password tidak valid'
+      });
+    }
+
+    const cleanUsername = username.trim();
+    const cleanPassword = password;
+
+    if (!cleanUsername || !cleanPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username dan password wajib diisi'
+      });
+    }
+
+    // Parameterized Query via Sequelize ORM (Menggunakan Prepared Statement: SELECT * FROM users WHERE username = ?)
+    const user = await User.findOne({
+      where: { username: cleanUsername }
+    });
 
     if (!user) {
       return res.status(401).json({

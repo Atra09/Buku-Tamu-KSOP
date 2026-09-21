@@ -87,7 +87,7 @@ const ActivityLogPage = () => {
     // Layer 1: Check current logged-in session user
     let sessionRole = '';
     try {
-      const stored = localStorage.getItem('sitamu_user');
+      const stored = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
       if (stored) {
         const loggedUser = JSON.parse(stored);
         const loggedNama = (loggedUser.nama || '').toLowerCase().trim();
