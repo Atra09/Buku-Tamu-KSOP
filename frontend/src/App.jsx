@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import PublicKsop from './pages/PublicKsop';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DaftarKunjungan from './pages/DaftarKunjungan';
@@ -10,6 +10,7 @@ import ActivityLogPage from './pages/ActivityLogPage';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
 import NotifBot from './pages/NotifBot';
+import JadwalPetugas from './pages/JadwalPetugas';
 import { stopAllGlobalWebcamStreams } from './components/WebcamCapture';
 
 // Automatic Hardware Camera Cleanup on Route Navigation
@@ -70,7 +71,9 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-import { isSessionValid, updateLastActivity, clearSession, getStoredUser } from './utils/session';
+import { isSessionValid, updateLastActivity, clearSession, getStoredUser, isQrGuestSession, purgeUnauthorizedGuestAccess } from './utils/session';
+import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 
 // Session Auto-Logout & Activity Tracker Component
 const SessionActivityTracker = () => {
@@ -123,8 +126,21 @@ const PublicOnlyRoute = ({ children }) => {
   return children;
 };
 
-// Protected Route Component for any logged in User/Admin
-const ProtectedRoute = ({ children }) => {
+/**
+ * AuthorizedRoute
+ * Route guard terpusat untuk seluruh rute internal/admin.
+ * Mengeliminasi duplikasi verifikasi QR URL param, blacklist check, validitas sesi 30 menit, dan otorisasi role.
+ */
+const AuthorizedRoute = ({ allowedRoles = [], children }) => {
+  const [searchParams] = useSearchParams();
+  const urlQrToken = searchParams.get('reg') || searchParams.get('token') || searchParams.get('qr_token');
+
+  // Tolak keras jika tamu QR mencoba mengakses rute admin internal
+  if (urlQrToken || isQrGuestSession()) {
+    purgeUnauthorizedGuestAccess(urlQrToken);
+    return <Navigate to="/login" replace />;
+  }
+
   if (!isSessionValid()) {
     const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
     if (rawUser) {
@@ -137,55 +153,57 @@ const ProtectedRoute = ({ children }) => {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  if (allowedRoles && allowedRoles.length > 0) {
+    const role = (user.role || 'user').toLowerCase();
+    const isAllowed = allowedRoles.some((r) => r.toLowerCase() === role);
+    if (!isAllowed) {
+      return <Navigate to="/admin" replace />;
+    }
+  }
+
   return children;
 };
 
-// Route wrapper restricted strictly to Admin role
-const AdminOnlyRoute = ({ children }) => {
-  if (!isSessionValid()) {
-    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-    if (rawUser) {
-      sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
-    }
-    return <Navigate to="/login" replace />;
+// Route wrapper aliases (mempertahankan semantik deklarasi rute yang jelas & aman)
+const ProtectedRoute = ({ children }) => <AuthorizedRoute>{children}</AuthorizedRoute>;
+
+const AdminOnlyRoute = ({ children }) => (
+  <AuthorizedRoute allowedRoles={['admin', 'superuser', 'administrator', 'super user']}>
+    {children}
+  </AuthorizedRoute>
+);
+
+const KordinatorAndAdminRoute = ({ children }) => (
+  <AuthorizedRoute allowedRoles={['admin', 'superuser', 'administrator', 'super user', 'kordinator', 'koordinator']}>
+    {children}
+  </AuthorizedRoute>
+);
+
+// Route wrapper for Guest Registration: Accessible by valid QR Token OR Logged-in Staff
+const GuestOrStaffRoute = ({ children }) => {
+  const [searchParams] = useSearchParams();
+  const urlQrToken = searchParams.get('reg') || searchParams.get('token') || searchParams.get('qr_token');
+
+  // Allow if scanning QR code or already having valid QR Guest session
+  if (urlQrToken || isQrGuestSession()) {
+    return children;
   }
 
-  const user = getStoredUser();
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  const role = (user.role || 'user').toLowerCase();
-  if (role !== 'admin' && role !== 'superuser' && role !== 'administrator') {
-    return <Navigate to="/admin" replace />;
-  }
-  return children;
-};
-
-// Route wrapper restricted to Kordinator & Admin roles
-const KordinatorAndAdminRoute = ({ children }) => {
-  if (!isSessionValid()) {
-    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-    if (rawUser) {
-      sessionStorage.setItem('sitamu_session_expired', 'Sesi Anda telah berakhir karena tidak ada aktivitas selama 30 menit. Silakan login kembali.');
-    }
-    return <Navigate to="/login" replace />;
+  // Allow if logged in staff
+  if (isSessionValid() && getStoredUser()) {
+    return children;
   }
 
-  const user = getStoredUser();
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  const role = (user.role || 'user').toLowerCase();
-  if (role === 'user') {
-    return <Navigate to="/admin" replace />;
-  }
-  return children;
+  return <Navigate to="/login" replace />;
 };
 
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
+      <AuthProvider>
+        <ToastProvider>
+          <Router>
         <SessionActivityTracker />
         <CameraRouteCleaner />
         <Routes>
@@ -213,17 +231,17 @@ function App() {
           <Route
             path="/buku-tamu"
             element={
-              <ProtectedRoute>
+              <GuestOrStaffRoute>
                 <PublicKsop />
-              </ProtectedRoute>
+              </GuestOrStaffRoute>
             }
           />
           <Route
             path="/registrasi"
             element={
-              <ProtectedRoute>
+              <GuestOrStaffRoute>
                 <PublicKsop />
-              </ProtectedRoute>
+              </GuestOrStaffRoute>
             }
           />
 
@@ -257,6 +275,14 @@ function App() {
             element={
               <KordinatorAndAdminRoute>
                 <KategoriAsal />
+              </KordinatorAndAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/jadwal"
+            element={
+              <KordinatorAndAdminRoute>
+                <JadwalPetugas />
               </KordinatorAndAdminRoute>
             }
           />
@@ -295,7 +321,9 @@ function App() {
           {/* Fallback Wildcard Route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Router>
+          </Router>
+        </ToastProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

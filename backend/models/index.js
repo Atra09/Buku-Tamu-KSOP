@@ -5,6 +5,8 @@ const MasterKategoriAsal = require('./MasterKategoriAsal');
 const User = require('./User');
 const ActivityLog = require('./ActivityLog');
 const WaTemplate = require('./WaTemplate');
+const JadwalPetugas = require('./JadwalPetugas');
+const QrSession = require('./QrSession');
 
 // Foreign Key Associations for Relational MySQL ERD Diagram
 MasterTujuan.hasMany(Tamu, { foreignKey: 'tujuan_id' });
@@ -18,6 +20,15 @@ Tamu.belongsTo(User, { foreignKey: 'user_id' });
 
 User.hasMany(ActivityLog, { foreignKey: 'user_id' });
 ActivityLog.belongsTo(User, { foreignKey: 'user_id' });
+
+User.hasMany(JadwalPetugas, { foreignKey: 'user_id' });
+JadwalPetugas.belongsTo(User, { foreignKey: 'user_id' });
+
+User.hasMany(QrSession, { foreignKey: 'petugas_id' });
+QrSession.belongsTo(User, { foreignKey: 'petugas_id', as: 'Petugas' });
+
+JadwalPetugas.hasMany(QrSession, { foreignKey: 'jadwal_id' });
+QrSession.belongsTo(JadwalPetugas, { foreignKey: 'jadwal_id', as: 'Jadwal' });
 
 const ensureTableColumnsIntegrity = async () => {
   try {
@@ -66,7 +77,11 @@ const ensureTableColumnsIntegrity = async () => {
 
     // 4. Ensure wa_templates table exists
     await WaTemplate.sync();
-    console.log('✅ Table wa_templates synced successfully');
+    console.log('Table wa_templates synced successfully');
+
+    // 5. Ensure jadwal_petugas table exists
+    await JadwalPetugas.sync();
+    console.log('Table jadwal_petugas synced successfully');
   } catch (err) {
     console.error('Error ensuring table columns integrity:', err.message);
   }
@@ -135,6 +150,38 @@ const seedInitialData = async () => {
 
       console.log('Seeded Initial Tamu');
     }
+
+    // Seed initial jadwal petugas (Senin: Petugas A, Selasa: Petugas B)
+    const jadwalCount = await JadwalPetugas.count();
+    if (jadwalCount === 0) {
+      const nonAdminUsers = await User.findAll({
+        where: { role: ['user', 'kordinator'] },
+        order: [['id', 'ASC']]
+      });
+
+      const petugasA = nonAdminUsers[0] || (await User.findOne());
+      const petugasB = nonAdminUsers[1] || petugasA;
+
+      if (petugasA) {
+        await JadwalPetugas.bulkCreate([
+          {
+            user_id: petugasA.id,
+            hari: 'Senin',
+            shift: 'Piket Harian',
+            keterangan: `Piket Senin - ${petugasA.nama}`,
+            status: 'Aktif'
+          },
+          {
+            user_id: petugasB ? petugasB.id : petugasA.id,
+            hari: 'Selasa',
+            shift: 'Piket Harian',
+            keterangan: `Piket Selasa - ${petugasB ? petugasB.nama : petugasA.nama}`,
+            status: 'Aktif'
+          }
+        ]);
+        console.log('Seeded Initial Jadwal Petugas: Senin (Petugas A) & Selasa (Petugas B)');
+      }
+    }
   } catch (error) {
     console.error('Error seeding data:', error);
   }
@@ -148,6 +195,8 @@ module.exports = {
   User,
   ActivityLog,
   WaTemplate,
+  JadwalPetugas,
+  QrSession,
   seedInitialData,
   ensureTableColumnsIntegrity
 };

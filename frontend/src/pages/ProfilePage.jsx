@@ -1,28 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import AdminLayout from '../components/AdminLayout';
 import UserProfileModal from '../components/UserProfileModal';
-import Flash from '../components/flash/flash';
 import { User, Shield, Key, Edit3, Calendar, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const ProfilePage = () => {
-  const [user, setUser] = useState(null);
+  const { user, updateUser } = useAuth();
+  const { showToast } = useToast();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [toast, setToast] = useState(null);
-
-  const loadUserData = () => {
-    const storedUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        setUser(null);
-      }
-    }
-  };
-
-  useEffect(() => {
-    loadUserData();
-  }, []);
 
   const getRoleLabel = (roleStr) => {
     const r = (roleStr || 'user').toLowerCase();
@@ -135,17 +121,14 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Toast Notification */}
-      <Flash toast={toast} onClose={() => setToast(null)} />
-
       {/* Edit Profile Modal */}
       <UserProfileModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         user={user}
         onProfileUpdated={(updatedUser) => {
-          setUser(updatedUser);
-          setToast({ message: 'Profil berhasil diperbarui!', type: 'success' });
+          updateUser(updatedUser);
+          showToast('Profil berhasil diperbarui!', 'success');
         }}
       />
     </AdminLayout>

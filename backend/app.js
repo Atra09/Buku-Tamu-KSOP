@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const helmet = require('helmet');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -9,10 +10,41 @@ const { sequelize, seedInitialData } = require('./models');
 
 const app = express();
 
-// Middlewares
-app.use(cors());
+// Trust reverse proxy (Nginx & Cloudflare Tunnel) to get accurate client IP address
+app.set('trust proxy', 1);
+
+// HTTP Security Headers (Helmet)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false
+}));
+
+// CORS Configuration
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : true;
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+// Lightweight API Request Logger for terminal visibility
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const status = res.statusCode;
+      const statusIcon = status < 400 ? '✅' : '❌';
+      console.log(`[API ${statusIcon}] ${req.method} ${req.originalUrl} - ${status} (${duration}ms)`);
+    });
+  }
+  next();
+});
 
 const fs = require('fs');
 

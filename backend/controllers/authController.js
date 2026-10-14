@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { User, ActivityLog } = require('../models');
+const storageService = require('../services/storageService');
 
 // POST /api/auth/login
 exports.login = async (req, res) => {
@@ -45,10 +47,15 @@ exports.login = async (req, res) => {
 
     // Check password with bcrypt or fallback to plaintext comparison
     let isMatch = false;
+    let needsUpgrade = false;
+
     if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
       isMatch = await bcrypt.compare(password, user.password);
     } else {
       isMatch = (user.password === password);
+      if (isMatch) {
+        needsUpgrade = true;
+      }
     }
 
     if (!isMatch) {
@@ -56,6 +63,18 @@ exports.login = async (req, res) => {
         success: false,
         message: 'Username atau password tidak valid'
       });
+    }
+
+    // Auto-upgrade legacy plaintext password to secure bcrypt hash
+    if (needsUpgrade) {
+      try {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+        await user.save();
+        console.log(`[Security Auto-Upgrade] Password akun "${user.username}" berhasil di-hash ke bcrypt.`);
+      } catch (upgradeErr) {
+        console.error('[Security Auto-Upgrade Error]:', upgradeErr);
+      }
     }
 
     // Record Login Activity
@@ -70,11 +89,23 @@ exports.login = async (req, res) => {
       console.error('Error recording login log:', e);
     }
 
+    // Sign genuine JWT token matching standard
+    const token = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        nama: user.nama,
+        role: user.role
+      },
+      process.env.JWT_SECRET || 'sitamu_ksop_secret_key_2026_rwerwerwer33',
+      { expiresIn: '3h' }
+    );
+
     // Return user info and session token
     res.json({
       success: true,
       message: 'Login berhasil',
-      token: `sitamu-token-${user.id}-${Date.now()}`,
+      token,
       user: {
         id: user.id,
         username: user.username,
@@ -90,7 +121,12 @@ exports.login = async (req, res) => {
 // GET /api/auth/me
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findOne();
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Autentikasi diperlukan' });
+    }
+
+    const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
 
     res.json({
@@ -111,41 +147,41 @@ exports.getProfile = async (req, res) => {
 // PUT /api/auth/profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { userId, nama, username, password } = req.body;
-    const targetId = userId || req.body.id;
+    const { nama, username, password } = req.body;
 
-    let user;
-    if (targetId) {
-      user = await User.findByPk(targetId);
-    }
-    if (!user && req.body.currentUsername) {
-      user = await User.findOne({ where: { username: req.body.currentUsername } });
-    }
-    if (!user && username) {
-      user = await User.findOne({ where: { username } });
-    }
-    if (!user) {
-      user = await User.findOne();
+    // Kunci targetId HANYA dari token JWT yang sudah terverifikasi (Anti-IDOR)
+    const targetId = req.user?.id;
+    if (!targetId) {
+      return res.status(401).json({ success: false, message: 'Autentikasi diperlukan' });
     }
 
+    const user = await User.findByPk(targetId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
     }
 
-    // Check if username is changed and already taken
-    if (username && username !== user.username) {
-      const existingUser = await User.findOne({ where: { username } });
-      if (existingUser && existingUser.id !== user.id) {
-        return res.status(400).json({ success: false, message: `Username "${username}" sudah digunakan` });
+    const roleStr = (user.role || '').toLowerCase();
+    const isAdmin = roleStr === 'admin' || roleStr === 'superuser' || roleStr === 'super user';
+
+    // Aturan Hak Akses:
+    // Koordinator dan User biasa TIDAK BISA mengedit nama dan username-nya sendiri.
+    // Hanya Administrator yang berhak mengubah nama dan username.
+    if (isAdmin) {
+      if (username && username.trim() !== '' && username.trim() !== user.username) {
+        const cleanUsername = username.trim();
+        const existingUser = await User.findOne({ where: { username: cleanUsername } });
+        if (existingUser && existingUser.id !== user.id) {
+          return res.status(400).json({ success: false, message: `Username "${cleanUsername}" sudah digunakan` });
+        }
+        user.username = cleanUsername;
       }
-      user.username = username;
+
+      if (nama && nama.trim() !== '') {
+        user.nama = nama.trim();
+      }
     }
 
-    if (nama) {
-      user.nama = nama;
-    }
-
-    // Update password if provided
+    // Update password if provided (Dapat diubah oleh pemilik akun terautentikasi)
     if (password && password.trim() !== '') {
       if (password.trim().length < 6) {
         return res.status(400).json({
@@ -153,119 +189,20 @@ exports.updateProfile = async (req, res) => {
           message: 'Password minimal 6 karakter'
         });
       }
-      user.password = await bcrypt.hash(password, 10);
+      user.password = await bcrypt.hash(password.trim(), 10);
     }
 
-    // Helper untuk hapus file foto profil lama secara fisik
-    const cleanUser = user.username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_');
-    const oldFoto = user.foto;
-    const path = require('path');
-    const fs = require('fs');
-
-    const getProfilDirs = () => [
-      path.resolve(__dirname, '../public/profil'),
-      path.resolve(__dirname, '../../frontend/public/profil')
-    ];
-
-    const cleanupOldProfilePhotos = (targetUsername, currentFotoUrl, newFileName) => {
-      const profilDirs = getProfilDirs();
-
-      profilDirs.forEach(profilDir => {
-        try {
-          if (fs.existsSync(profilDir)) {
-            const files = fs.readdirSync(profilDir);
-            files.forEach(file => {
-              if (file === '.gitkeep') return;
-              if (newFileName && file === newFileName) return;
-
-              const lowerFile = file.toLowerCase();
-              if (
-                lowerFile.startsWith('profile_') ||
-                (cleanUser && (lowerFile.startsWith(`${cleanUser}.`) || lowerFile.startsWith(`${cleanUser}_`)))
-              ) {
-                try {
-                  fs.unlinkSync(path.join(profilDir, file));
-                } catch (e) {}
-              }
-            });
-          }
-
-          if (currentFotoUrl && typeof currentFotoUrl === 'string') {
-            const cleanPath = currentFotoUrl.split('?')[0];
-            if (cleanPath.startsWith('/profil/')) {
-              const fileNameOnly = cleanPath.replace('/profil/', '');
-              if (fileNameOnly !== newFileName) {
-                const targetPath = path.join(profilDir, fileNameOnly);
-                if (fs.existsSync(targetPath)) {
-                  try {
-                    fs.unlinkSync(targetPath);
-                  } catch (e) {}
-                }
-              }
-            }
-          }
-        } catch (err) {
-          console.error('[Auth Cleanup Error]:', err.message);
-        }
+    // Simpan foto profil secara asinkron non-blocking via storageService
+    if (req.file || req.body.foto) {
+      const newFotoPath = await storageService.saveProfilePhoto({
+        file: req.file,
+        fotoBase64: req.body.foto,
+        username: user.username,
+        oldFoto: user.foto
       });
-    };
-
-    // Handle foto file upload (Multer memoryStorage/diskStorage) or base64 string
-    if (req.file) {
-      const origName = req.file.originalname || req.file.filename || 'profile.png';
-      const ext = (path.extname(origName) || '.png').toLowerCase();
-      const targetFilename = `${cleanUser}${ext}`;
-
-      const profilDirs = getProfilDirs();
-
-      profilDirs.forEach(dir => {
-        try {
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-          }
-        } catch (e) {}
-      });
-
-      cleanupOldProfilePhotos(user.username, oldFoto, targetFilename);
-
-      if (req.file.buffer) {
-        profilDirs.forEach(dir => {
-          try { fs.writeFileSync(path.join(dir, targetFilename), req.file.buffer); } catch (e) {}
-        });
-      } else if (req.file.path && fs.existsSync(req.file.path)) {
-        profilDirs.forEach(dir => {
-          try { fs.copyFileSync(req.file.path, path.join(dir, targetFilename)); } catch (e) {}
-        });
+      if (newFotoPath) {
+        user.foto = newFotoPath;
       }
-
-      user.foto = `/profil/${targetFilename}`;
-    } else if (req.body.foto && req.body.foto.startsWith('data:image')) {
-      try {
-        const base64Data = req.body.foto.replace(/^data:image\/\w+;base64,/, '');
-        const filename = `${cleanUser}.png`;
-        cleanupOldProfilePhotos(user.username, oldFoto, filename);
-
-        const profilDirs = getProfilDirs();
-
-        profilDirs.forEach(dir => {
-          try {
-            if (!fs.existsSync(dir)) {
-              fs.mkdirSync(dir, { recursive: true });
-            }
-          } catch (e) {}
-        });
-
-        profilDirs.forEach(dir => {
-          try { fs.writeFileSync(path.join(dir, filename), base64Data, 'base64'); } catch (e) {}
-        });
-
-        user.foto = `/profil/${filename}`;
-      } catch (err) {
-        console.error('Error saving base64 profile image:', err);
-      }
-    } else if (req.body.foto) {
-      const cleanPath = req.body.foto.split('?')[0];
-      user.foto = cleanPath;
     }
 
     await user.save();

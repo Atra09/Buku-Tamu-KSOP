@@ -1,4 +1,22 @@
 const localWaBot = require('./localWaBot');
+const { WaTemplate } = require('../models');
+const { DEFAULT_WA_TEMPLATE, renderWaTemplate } = require('../utils/waTemplateHelper');
+const { formatWaktuWib } = require('../utils/timeHelper');
+
+/**
+ * Mengambil template pesan aktif dari database (atau fallback ke default sistem)
+ */
+const getActiveTemplateText = async () => {
+  try {
+    const active = await WaTemplate.findOne({ where: { is_active: true } });
+    if (active?.isi_pesan?.trim()) {
+      return active.isi_pesan;
+    }
+  } catch (err) {
+    console.error('[WA Service] Gagal memuat template aktif, fallback ke default:', err.message);
+  }
+  return DEFAULT_WA_TEMPLATE;
+};
 
 /**
  * Service untuk mengirim notifikasi pesan WhatsApp ke Pejabat Tujuan secara otomatis
@@ -11,7 +29,7 @@ exports.sendWANotification = async ({ targetNoHp, namaPejabat, guest }) => {
       return { success: false, message: 'Nomor HP tujuan kosong' };
     }
 
-    // Format nomor telepon menjadi format internasional (misal 628123456789)
+    // Format nomor telepon menjadi format internasional (e.g. 628123456789)
     let cleanNumber = targetNoHp.replace(/[^0-9]/g, '');
     if (cleanNumber.startsWith('0')) {
       cleanNumber = '62' + cleanNumber.substring(1);
@@ -19,66 +37,29 @@ exports.sendWANotification = async ({ targetNoHp, namaPejabat, guest }) => {
 
     const namaTujuanStr = guest.bertemu || 'Pejabat / Staf Tujuan';
     const namaPejabatStr = namaPejabat ? `${namaPejabat}` : `Bpk/Ibu ${namaTujuanStr}`;
-    
+
     const asalStr = (guest.asal_instansi && guest.kategori_asal && guest.asal_instansi.trim().toLowerCase() !== guest.kategori_asal.trim().toLowerCase())
       ? `${guest.asal_instansi} (${guest.kategori_asal})`
       : (guest.asal_instansi || guest.kategori_asal || '-');
 
-    // Format tanggal dan jam formal (contoh: 10 September 2026 pukul 13.15 WIB)
-    let formattedWaktu = `${guest.tanggal || '-'} pukul ${guest.jam ? guest.jam.substring(0, 5) : '-'} WIB`;
-    if (guest.tanggal) {
-      try {
-        const parts = guest.tanggal.split('-');
-        if (parts.length === 3) {
-          const bulanNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-          const bIndex = parseInt(parts[1], 10) - 1;
-          if (bIndex >= 0 && bIndex < 12) {
-            const jamStr = guest.jam ? guest.jam.substring(0, 5) : '-';
-            formattedWaktu = `${parseInt(parts[2], 10)} ${bulanNames[bIndex]} ${parts[0]} pukul ${jamStr} WIB`;
-          }
-        }
-      } catch (e) {}
-    }
-
-    // Trim spasi di awal & akhir agar format bold (*) WhatsApp tidak gagal akibat spasi tersembunyi
+    const formattedWaktu = formatWaktuWib(guest.tanggal, guest.jam);
     const cleanKeperluan = guest.keperluan ? guest.keperluan.toString().trim() : '-';
     const cleanNama = guest.nama ? guest.nama.toString().trim() : '-';
-    const cleanNoWa = guest.no_telpon ? guest.no_telpon.toString().trim() : (guest.no_telepon ? guest.no_telepon.toString().trim() : (guest.no_hp ? guest.no_hp.toString().trim() : '-'));
+    const cleanNoWa = (guest.no_telpon || guest.no_telepon || guest.no_hp || '-').toString().trim();
 
-    let waMessageText = `🔔 *NOTIFIKASI KUNJUNGAN TAMU KSOP*
+    // Dapatkan template aktif & render teks pesan dengan Single Source of Truth helper
+    const templateToUse = await getActiveTemplateText();
+    const waMessageText = renderWaTemplate(templateToUse, {
+      nama_pejabat: namaPejabatStr,
+      tujuan_tamu: namaTujuanStr,
+      nama_tamu: cleanNama,
+      WA_tamu: cleanNoWa,
+      asal_instansi: asalStr,
+      waktu: formattedWaktu,
+      keperluan_tamu: cleanKeperluan
+    });
 
-Yth. *${namaPejabatStr}* (${namaTujuanStr}),
-
-Diberitahukan bahwa telah hadir tamu *${cleanNama}* dari *${asalStr}* pada tanggal *${formattedWaktu}* dengan kepentingan:
-*${cleanKeperluan}*
-
-_Terima kasih._
-> Pesan Ini Dikirim Otomatis Oleh Web Si Tamu`;
-
-    // Cek apakah ada template kustom aktif di database
-    try {
-      const { WaTemplate } = require('../models');
-      const activeTemplate = await WaTemplate.findOne({ where: { is_active: true } });
-      if (activeTemplate && activeTemplate.isi_pesan) {
-        waMessageText = activeTemplate.isi_pesan
-          .replace(/{nama_pejabat}/g, namaPejabatStr)
-          .replace(/{tujuan_tamu}/g, namaTujuanStr)
-          .replace(/{nama_tujuan}/g, namaTujuanStr)
-          .replace(/{nama_tamu}/g, cleanNama)
-          .replace(/{WA_tamu}/g, cleanNoWa)
-          .replace(/{no_wa}/g, cleanNoWa)
-          .replace(/{no_telepon}/g, cleanNoWa)
-          .replace(/{no_telpon}/g, cleanNoWa)
-          .replace(/{asal_instansi}/g, asalStr)
-          .replace(/{waktu}/g, formattedWaktu)
-          .replace(/{keperluan_tamu}/g, cleanKeperluan)
-          .replace(/{keperluan}/g, cleanKeperluan);
-      }
-    } catch (errTemplate) {
-      console.error('[WA Service] Error loading custom template, fallback to default:', errTemplate.message);
-    }
-
-    // send via local
+    // Kirim via Local Bot Baileys jika terhubung
     if (localWaBot.getBotStatus().isConnected) {
       console.log(`[Local WA Bot] Mengirim pesan otomatis ke: ${cleanNumber}...`);
       const botRes = await localWaBot.sendTextMessage(cleanNumber, waMessageText);

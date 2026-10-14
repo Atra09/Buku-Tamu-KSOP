@@ -1,38 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminLayout from '../components/AdminLayout';
-import Flash from '../components/flash/flash';
-import { Users, UserPlus, Edit3, Trash2, Shield, User, Key, Check, X, Search } from 'lucide-react';
+import DeleteModal from '../components/modal/delete';
+import { useToast } from '../context/ToastContext';
+import UserModal from '../components/modal/usermodal';
+import Table, { TableActions } from '../components/table';
+import { UserPlus, Shield, Search } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const UserManagement = () => {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const { showToast } = useToast();
 
-  // Toast state
-  const [toast, setToast] = useState(null);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3500);
-  };
-
-  // Modal state
+  // Modal create/edit user state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    nama: '',
-    role: 'user'
-  });
-  const [formError, setFormError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   // Delete modal state
   const [deletingUser, setDeletingUser] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -54,74 +43,19 @@ const UserManagement = () => {
 
   const openAddModal = () => {
     setEditingUser(null);
-    setFormData({ username: '', password: '', nama: '', role: 'user' });
-    setFormError('');
     setIsModalOpen(true);
   };
 
   const openEditModal = (user) => {
     setEditingUser(user);
-    const r = (user.role || '').toLowerCase();
-    setFormData({
-      username: user.username,
-      password: '', // Kosong jika tidak ingin ubah password
-      nama: user.nama,
-      role: (r === 'koordinator' || r === 'kordinator') ? 'kordinator' : r
-    });
-    setFormError('');
     setIsModalOpen(true);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.username.trim() || !formData.nama.trim()) {
-      setFormError('Username dan Nama wajib diisi!');
-      return;
-    }
-    if (!editingUser) {
-      if (!formData.password || formData.password.trim().length < 6) {
-        setFormError('Password wajib diisi minimal 6 karakter!');
-        return;
-      }
-    } else {
-      if (formData.password.trim() && formData.password.trim().length < 6) {
-        setFormError('Password minimal 6 karakter!');
-        return;
-      }
-    }
-
-    try {
-      setSubmitting(true);
-      setFormError('');
-
-      if (editingUser) {
-        // Edit User
-        const res = await axios.put(`/api/users/${editingUser.id}`, formData);
-        if (res.data.success) {
-          setIsModalOpen(false);
-          showToast(`Akun user "${formData.nama}" (@${formData.username}) berhasil diperbarui`, 'success');
-          fetchUsers();
-        }
-      } else {
-        // Add User
-        const res = await axios.post('/api/users', formData);
-        if (res.data.success) {
-          setIsModalOpen(false);
-          showToast(`Berhasil menambahkan akun user baru "${formData.nama}" (@${formData.username})`, 'success');
-          fetchUsers();
-        }
-      }
-    } catch (err) {
-      setFormError(err.response?.data?.message || 'Terjadi kesalahan server');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleDelete = async () => {
     if (!deletingUser) return;
     const deletedUsername = deletingUser.username;
     try {
+      setDeleting(true);
       const res = await axios.delete(`/api/users/${deletingUser.id}`);
       if (res.data.success) {
         setDeletingUser(null);
@@ -130,6 +64,8 @@ const UserManagement = () => {
       }
     } catch (err) {
       showToast(err.response?.data?.message || 'Gagal menghapus user', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -167,206 +103,88 @@ const UserManagement = () => {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center text-slate-400 font-semibold text-xs animate-pulse">
-            Memuat data akun user...
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 font-semibold text-xs">
-            Belum ada akun user terdaftar.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-100">
-                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase">
-                  <th className="py-4 px-6 text-center w-16">NO</th>
-                  <th className="py-4 px-6">NAMA PETUGAS</th>
-                  <th className="py-4 px-6">USERNAME</th>
-                  <th className="py-4 px-6 text-center">ROLE / HAK AKSES</th>
-                  <th className="py-4 px-6">TANGGAL DIBUAT</th>
-                  <th className="py-4 px-6 text-center w-32">AKSI</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {filteredUsers.map((u, index) => (
-                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-6 text-center font-bold text-slate-400">{index + 1}</td>
-                    <td className="py-4 px-6 font-bold text-slate-900">{u.nama}</td>
-                    <td className="py-4 px-6 font-mono text-slate-600">@{u.username}</td>
-                    <td className="py-4 px-6 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase ${u.role === 'admin' || u.role === 'superuser' || u.role === 'super user'
-                          ? 'bg-rose-50 text-rose-600 border border-rose-200/60'
-                          : u.role === 'koordinator'
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
-                            : 'bg-sky-50 text-sky-600 border border-sky-200/60'
-                        }`}>
-                        <Shield className="w-3 h-3" />
-                        {u.role === 'admin' ? 'SUPER USER' : u.role.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-slate-500">
-                      {new Date(u.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </td>
-                    <td className="py-4 px-6 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(u)}
-                          className="p-2 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
-                          title="Edit User"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingUser(u)}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="Hapus User"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Modal Add/Edit User */}
-      {isModalOpen && (
-        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <h3 className="font-extrabold text-base text-slate-900">
-                {editingUser ? 'Edit Akun User' : 'Tambah User Baru'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {formError && (
-              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Nama Lengkap Petugas</label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: Budi Santoso"
-                    value={formData.nama}
-                    onChange={(e) => setFormData({ ...formData, nama: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                  />
+      <Table
+        columns={[
+          { label: 'NO', className: 'py-3.5 px-6 text-center w-16' },
+          { label: 'NAMA PETUGAS', className: 'py-3.5 px-6' },
+          { label: 'USERNAME', className: 'py-3.5 px-6' },
+          { label: 'ROLE / HAK AKSES', className: 'py-3.5 px-6 text-center' },
+          { label: 'TANGGAL DIBUAT', className: 'py-3.5 px-6' },
+          { label: 'AKSI', className: 'py-3.5 px-6 text-center w-28' },
+        ]}
+        data={filteredUsers}
+        loading={loading}
+        loadingMessage="Memuat data akun user..."
+        emptyMessage="Belum ada akun user terdaftar."
+        maxHeight=""
+        className="rounded-2xl border border-slate-200/80 shadow-xs"
+        renderRow={(u, index) => {
+          const isSelf = currentUser && Number(currentUser.id) === Number(u.id);
+          return (
+            <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+              <td className="py-4 px-6 text-center font-bold text-slate-400">{index + 1}</td>
+              <td className="py-4 px-6 font-bold text-slate-900">
+                <div className="flex items-center gap-2">
+                  <span>{u.nama}</span>
+                  {isSelf && (
+                    <span className="text-[10px] font-extrabold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
+                      Anda
+                    </span>
+                  )}
                 </div>
-              </div>
+              </td>
+              <td className="py-4 px-6 font-mono text-slate-600">@{u.username}</td>
+              <td className="py-4 px-6 text-center">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase ${u.role === 'admin' || u.role === 'superuser' || u.role === 'super user'
+                    ? 'bg-rose-50 text-rose-600 border border-rose-200/60'
+                    : u.role === 'koordinator'
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
+                      : 'bg-sky-50 text-sky-600 border border-sky-200/60'
+                  }`}>
+                  <Shield className="w-3 h-3" />
+                  {u.role === 'admin' ? 'SUPER USER' : u.role.toUpperCase()}
+                </span>
+              </td>
+              <td className="py-4 px-6 text-slate-500">
+                {new Date(u.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </td>
+              <td className="py-4 px-6 text-center">
+                <TableActions
+                  onEdit={() => openEditModal(u)}
+                  onDelete={isSelf ? undefined : () => setDeletingUser(u)}
+                  deleteTitle={isSelf ? 'Akun Anda sedang aktif' : 'Hapus User'}
+                />
+              </td>
+            </tr>
+          );
+        }}
+      />
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Username</label>
-                <div className="relative">
-                  <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: budi_ksop"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Password {editingUser && <span className="text-slate-400 font-normal">(Kosongkan jika tidak diubah)</span>}
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="password"
-                    placeholder={editingUser ? 'Masukkan password baru (min. 6 karakter)...' : 'Masukkan password (min. 6 karakter)...'}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-400 font-medium mt-1">Minimal 6 karakter</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Role / Hak Akses</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-bold"
-                >
-                  <option value="user">USER (Akses Dashboard & Daftar Kunjungan)</option>
-                  <option value="kordinator">KOORDINATOR (Akses Dashboard, Daftar Kunjungan, Master Data & Log Aktivitas)</option>
-                  <option value="admin">SUPER USER (Akses Penuh Semua Modul & Kelola User)</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-sky-600/20 transition-all cursor-pointer"
-                >
-                  {submitting ? 'Menyimpan...' : 'Simpan User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal Add/Edit User (Modular, Isolated & Lightweight) */}
+      <UserModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        editingUser={editingUser}
+        onSuccess={(msg) => {
+          showToast(msg, 'success');
+          fetchUsers();
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
-      {deletingUser && (
-        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 text-center animate-in fade-in zoom-in-95 duration-150">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <h3 className="font-extrabold text-base text-slate-900 mb-1">Hapus Akun User?</h3>
-            <p className="text-xs text-slate-500 mb-6">
-              Apakah Anda yakin ingin menghapus akun <span className="font-bold text-slate-800">@{deletingUser.username}</span>? Tindakan ini tidak dapat dibatalkan.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeletingUser(null)}
-                className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-md shadow-rose-600/20 cursor-pointer"
-              >
-                Hapus User
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Flash Notification Toast */}
-      <Flash toast={toast} onClose={() => setToast(null)} />
+      <DeleteModal
+        isOpen={!!deletingUser}
+        onClose={() => setDeletingUser(null)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Hapus Akun User?"
+        confirmText="Hapus User"
+        message={
+          <p>
+            Apakah Anda yakin ingin menghapus akun <span className="font-bold text-slate-800">@{deletingUser?.username}</span>? Tindakan ini tidak dapat dibatalkan.
+          </p>
+        }
+      />
     </AdminLayout>
   );
 };

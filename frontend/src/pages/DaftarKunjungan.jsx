@@ -1,15 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Search, Calendar, Printer, Trash2, Eye, X, User, MapPin, AlertTriangle, CheckCircle2, AlertCircle, FileSpreadsheet, Download, ExternalLink
+  Calendar, Printer, Trash2, Eye, X, User, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet
 } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
-import Flash from '../components/flash/flash';
-import { exportTamuToExcel } from '../utils/excelExport';
+import SearchBar from '../components/common/SearchBar';
+import Dropdown from '../components/common/Dropdown';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import TamuDetail from '../components/tamu/TamuDetail';
+import TamuFoto from '../components/tamu/TamuFoto';
+import TamuExport from '../components/tamu/TamuExport';
+import TamuPeta from '../components/tamu/TamuPeta';
+import DeleteModal from '../components/modal/delete';
+import StatusConfirmModal from '../components/tamu/confirm';
+import useGuestStatus from '../hooks/useGuestStatus';
+import Pagination from '../components/common/pagination';
 
 const DaftarKunjungan = () => {
   const [tamuList, setTamuList] = useState([]);
+  const [totalTamu, setTotalTamu] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Filters state
@@ -17,7 +28,6 @@ const DaftarKunjungan = () => {
   const [selectedTanggal, setSelectedTanggal] = useState('');
   const [selectedKategori, setSelectedKategori] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
-  const [kategoriFilterOptions, setKategoriFilterOptions] = useState([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -28,49 +38,30 @@ const DaftarKunjungan = () => {
   const [selectedGuestForBadge, setSelectedGuestForBadge] = useState(null);
   const [detailGuest, setDetailGuest] = useState(null);
   const [selectedLocationMap, setSelectedLocationMap] = useState(null);
-  const [mapViewMode, setMapViewMode] = useState('m'); // 'm' = Peta Jalan (Map Vector - Fast), 'k' = Satelit (Satellite)
-  const [isMapLoading, setIsMapLoading] = useState(true);
   const [guestToDelete, setGuestToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  // Toast Notification state
-  const [toast, setToast] = useState(null);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3500);
-  };
-
-  useEffect(() => {
-    fetchMasterCategories();
-  }, []);
-
-  const fetchMasterCategories = async () => {
-    try {
-      const res = await axios.get('/api/master/dropdowns');
-      if (res.data && res.data.data && res.data.data.kategoriAsal) {
-        setKategoriFilterOptions(res.data.data.kategoriAsal);
-      }
-    } catch (err) {
-      console.error('Error fetching master categories for filter:', err);
-    }
-  };
-
-  useEffect(() => {
+  const {
+    statusConfirmTarget,
+    statusUpdating,
+    openStatusConfirm,
+    closeStatusConfirm,
+    executeStatusToggle
+  } = useGuestStatus(() => {
     fetchTamuData();
-  }, [search, selectedTanggal, selectedKategori, selectedStatus]);
+  });
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, selectedTanggal, selectedKategori, selectedStatus, tamuList.length]);
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
-  const fetchTamuData = async () => {
+  const fetchTamuData = async (targetPage = currentPage, targetLimit = itemsPerPage) => {
     try {
       setLoading(true);
-      const params = {};
+      const params = {
+        limit: targetLimit,
+        offset: (targetPage - 1) * targetLimit
+      };
       if (search) params.search = search;
       if (selectedTanggal) params.tanggal = selectedTanggal;
       if (selectedKategori) params.kategori_asal = selectedKategori;
@@ -78,56 +69,44 @@ const DaftarKunjungan = () => {
 
       const res = await axios.get('/api/tamu', { params });
       if (res.data && res.data.success) {
-        setTamuList(res.data.data);
+        setTamuList(res.data.data || []);
+        setTotalTamu(typeof res.data.total === 'number' ? res.data.total : (res.data.data || []).length);
       }
     } catch (err) {
       console.error('Error fetching data tamu:', err);
+      const errMsg = err.response?.data?.message || 'Gagal memuat data tamu.';
+      showToast(errMsg, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const getLoggedInUser = () => {
-    try {
-      const storedUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-      return storedUser ? JSON.parse(storedUser) : null;
-    } catch (e) {
-      return null;
-    }
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchTamuData(1, itemsPerPage);
+  }, [search, selectedTanggal, selectedKategori, selectedStatus]);
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchTamuData(newPage, itemsPerPage);
   };
 
-  const handleToggleStatus = async (id, currentStatus) => {
-    const nextStatus = currentStatus === 'Berkunjung' ? 'Selesai' : 'Berkunjung';
-    const currentUser = getLoggedInUser();
-    const headers = {};
-    if (currentUser && (currentUser.nama || currentUser.username)) {
-      headers['x-user-nama'] = encodeURIComponent(currentUser.nama || currentUser.username);
-    }
-
-    try {
-      await axios.patch(`/api/tamu/${id}/status`, { status: nextStatus }, { headers });
-      showToast(`Status tamu diperbarui menjadi "${nextStatus}"`, 'success');
-      fetchTamuData();
-    } catch (err) {
-      showToast('Gagal memperbarui status tamu', 'error');
-    }
+  const handleItemsPerPageChange = (newLimit) => {
+    setItemsPerPage(newLimit);
+    setCurrentPage(1);
+    fetchTamuData(1, newLimit);
   };
 
   const executeDelete = async () => {
     if (!guestToDelete) return;
     const deletedName = guestToDelete.nama;
-    const currentUser = getLoggedInUser();
-    const headers = {};
-    if (currentUser && (currentUser.nama || currentUser.username)) {
-      headers['x-user-nama'] = encodeURIComponent(currentUser.nama || currentUser.username);
-    }
 
     setDeleting(true);
     try {
-      await axios.delete(`/api/tamu/${guestToDelete.id}`, { headers });
+      await axios.delete(`/api/tamu/${guestToDelete.id}`);
       setGuestToDelete(null);
       showToast(`Data tamu "${deletedName}" berhasil dihapus`, 'success');
-      fetchTamuData();
+      fetchTamuData(currentPage, itemsPerPage);
     } catch (err) {
       showToast('Gagal menghapus data tamu', 'error');
     } finally {
@@ -142,135 +121,7 @@ const DaftarKunjungan = () => {
     setSelectedStatus('');
   };
 
-  // Month & Year state for custom export
-  const now = new Date();
-  const currentMonthStr = String(now.getMonth() + 1).padStart(2, '0');
-  const currentYearStr = String(now.getFullYear());
-
-  const [exportMonth, setExportMonth] = useState(currentMonthStr);
-  const [exportYear, setExportYear] = useState(currentYearStr);
-
-  const BULAN_OPTIONS = [
-    { value: '01', label: 'Januari' },
-    { value: '02', label: 'Februari' },
-    { value: '03', label: 'Maret' },
-    { value: '04', label: 'April' },
-    { value: '05', label: 'Mei' },
-    { value: '06', label: 'Juni' },
-    { value: '07', label: 'Juli' },
-    { value: '08', label: 'Agustus' },
-    { value: '09', label: 'September' },
-    { value: '10', label: 'Oktober' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'Desember' }
-  ];
-
-  const TAHUN_OPTIONS = ['2024', '2025', '2026', '2027', '2028'];
-
-  // Helper functions for Excel Export
-  const logExcelExportActivity = (details) => {
-    try {
-      const userStr = localStorage.getItem('sitamu_user');
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const headers = {};
-      if (userObj && userObj.nama) {
-        headers['x-user-nama'] = encodeURIComponent(userObj.nama);
-      }
-      axios.post('/api/logs', {
-        action: 'EKSPOR_EXCEL',
-        details
-      }, { headers }).catch(err => console.error('Error logging export activity:', err));
-    } catch (e) {
-      console.error('Error in log excel export:', e);
-    }
-  };
-
-  const fetchAllTamuDataForExport = async () => {
-    try {
-      const res = await axios.get('/api/tamu', { params: { limit: 1000 } });
-      if (res.data && res.data.success) {
-        return res.data.data;
-      }
-    } catch (e) {
-      console.error('Error fetching all tamu data for export:', e);
-    }
-    return tamuList;
-  };
-
-  const handleExportWeekly = async () => {
-    const allData = await fetchAllTamuDataForExport();
-    const nowDate = new Date();
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(nowDate.getDate() - 7);
-    const dateLimitStr = sevenDaysAgo.toISOString().split('T')[0];
-
-    const filtered = allData.filter(g => g.tanggal && g.tanggal >= dateLimitStr);
-    const success = exportTamuToExcel(filtered, 'Laporan Kunjungan Tamu Mingguan', 'Laporan_Kunjungan_Mingguan');
-    if (success) {
-      logExcelExportActivity(`Mengunduh Laporan Rekapitulasi Data Tamu Mingguan (${filtered.length} Tamu)`);
-      showToast(`Berhasil mengeksport ${filtered.length} data kunjungan mingguan!`, 'success');
-      setShowExportModal(false);
-    }
-  };
-
-  const handleExportSelectedMonthYear = async () => {
-    const allData = await fetchAllTamuDataForExport();
-    const targetPrefix = `${exportYear}-${exportMonth}`; // e.g. "2026-09"
-    const monthObj = BULAN_OPTIONS.find(b => b.value === exportMonth);
-    const monthLabel = monthObj ? monthObj.label : exportMonth;
-
-    const filtered = allData.filter(g => g.tanggal && g.tanggal.startsWith(targetPrefix));
-
-    if (filtered.length === 0) {
-      showToast(`Tidak ada data kunjungan tamu untuk periode ${monthLabel} ${exportYear}`, 'error');
-      return;
-    }
-
-    const reportTitle = `Laporan Kunjungan Tamu ${monthLabel} ${exportYear}`;
-    const fileNamePrefix = `Laporan_Kunjungan_${monthLabel}_${exportYear}`;
-    const success = exportTamuToExcel(filtered, reportTitle, fileNamePrefix);
-    if (success) {
-      logExcelExportActivity(`Mengunduh Laporan Rekapitulasi Data Tamu Periode ${monthLabel} ${exportYear} (${filtered.length} Tamu)`);
-      showToast(`Berhasil mengeksport ${filtered.length} data kunjungan (${monthLabel} ${exportYear})!`, 'success');
-      setShowExportModal(false);
-    }
-  };
-
-  const handleExportCurrent = () => {
-    const success = exportTamuToExcel(tamuList, 'Laporan Kunjungan Tamu Filtered', 'Laporan_Kunjungan_Filtered');
-    if (success) {
-      logExcelExportActivity(`Mengunduh Laporan Rekapitulasi Data Tamu Sesuai Filter (${tamuList.length} Tamu)`);
-      showToast(`Berhasil mengeksport ${tamuList.length} data kunjungan!`, 'success');
-      setShowExportModal(false);
-    }
-  };
-
-  // Pagination computations
-  const totalPages = Math.ceil(tamuList.length / itemsPerPage) || 1;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTamuList = tamuList.slice(startIndex, startIndex + itemsPerPage);
-
-  const generatePaginationItems = (current, total) => {
-    if (total <= 5) {
-      return Array.from({ length: total }, (_, i) => i + 1);
-    }
-    const items = [];
-    items.push(1);
-    if (current <= 3) {
-      items.push(2, 3);
-      items.push('...');
-      items.push(total);
-    } else if (current >= total - 2) {
-      items.push('...');
-      items.push(total - 2, total - 1, total);
-    } else {
-      items.push('...');
-      items.push(current - 1, current, current + 1);
-      items.push('...');
-      items.push(total);
-    }
-    return items;
-  };
+  const totalPages = Math.ceil(totalTamu / itemsPerPage) || 1;
 
   return (
     <AdminLayout
@@ -287,7 +138,7 @@ const DaftarKunjungan = () => {
 
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
-                Total: {tamuList.length} Tamu
+                Total: {totalTamu} Tamu
               </span>
 
               {/* Export Excel Button */}
@@ -304,16 +155,11 @@ const DaftarKunjungan = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Search Input */}
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Cari Nama, No Reg, Instansi..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-400 font-medium"
-              />
-            </div>
+            <SearchBar
+              placeholder="Cari Nama, No Reg, Instansi..."
+              value={search}
+              onChange={setSearch}
+            />
 
             {/* Date Filter */}
             <div className="relative">
@@ -321,36 +167,26 @@ const DaftarKunjungan = () => {
                 type="date"
                 value={selectedTanggal}
                 onChange={(e) => setSelectedTanggal(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-400 font-medium text-slate-700"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-400 font-medium text-slate-700 bg-white shadow-2xs"
               />
             </div>
 
-            {/* Category Filter */}
-            <div>
-              <select
-                value={selectedKategori}
-                onChange={(e) => setSelectedKategori(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-400 font-medium text-slate-700"
-              >
-                <option value="">Semua Kategori Asal</option>
-                {kategoriFilterOptions.map((kat, idx) => (
-                  <option key={idx} value={kat}>{kat}</option>
-                ))}
-              </select>
-            </div>
+            {/* Category Filter (On-Demand / Lazy Fetched) */}
+            <Dropdown
+              value={selectedKategori}
+              onChange={setSelectedKategori}
+              defaultLabel="Semua Kategori Asal"
+              fetchUrl="/api/master/dropdowns"
+              transformData={(res) => res.data?.data?.kategoriAsal || []}
+            />
 
-            {/* Status Filter */}
-            <div>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-400 font-medium text-slate-700"
-              >
-                <option value="">Semua Status</option>
-                <option value="Berkunjung">Berkunjung</option>
-                <option value="Selesai">Selesai</option>
-              </select>
-            </div>
+            {/* Status Filter (Static Options) */}
+            <Dropdown
+              value={selectedStatus}
+              onChange={setSelectedStatus}
+              defaultLabel="Semua Status"
+              options={['Berkunjung', 'Selesai']}
+            />
           </div>
 
           {(search || selectedTanggal || selectedKategori || selectedStatus) && (
@@ -398,7 +234,7 @@ const DaftarKunjungan = () => {
                     </td>
                   </tr>
                 ) : (
-                  paginatedTamuList.map((g) => (
+                  tamuList.map((g) => (
                     <tr key={g.id} className="hover:bg-sky-50/40 transition-colors">
                       {/* No Reg */}
                       <td className="p-3 font-extrabold text-blue-600 whitespace-nowrap">
@@ -472,7 +308,7 @@ const DaftarKunjungan = () => {
                       {/* Status Toggle Button */}
                       <td className="p-3">
                         <button
-                          onClick={() => handleToggleStatus(g.id, g.status)}
+                          onClick={() => openStatusConfirm(g.id, g.status)}
                           className={`px-3 py-1 rounded-full text-[11px] font-extrabold cursor-pointer transition-all shadow-xs ${g.status === 'Berkunjung'
                             ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
                             : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
@@ -529,381 +365,58 @@ const DaftarKunjungan = () => {
             </table>
           </div>
 
-          {/* Pagination Footer Toolbar */}
-          <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-slate-600 font-bold">
-              <span>Menampilkan</span>
-              <span className="text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                {tamuList.length === 0 ? 0 : startIndex + 1} - {Math.min(startIndex + itemsPerPage, tamuList.length)}
-              </span>
-              <span>dari <strong className="text-sky-700">{tamuList.length}</strong> Total Tamu</span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-extrabold text-slate-700 transition-colors shadow-2xs cursor-pointer"
-              >
-                Sebelumnya
-              </button>
-
-              {/* Page Number Buttons */}
-              <div className="flex items-center gap-1">
-                {generatePaginationItems(currentPage, totalPages).map((item, idx) => {
-                  if (item === '...') {
-                    return (
-                      <span key={`ellipsis-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs font-bold text-slate-400 select-none">
-                        ...
-                      </span>
-                    );
-                  }
-                  return (
-                    <button
-                      key={item}
-                      onClick={() => setCurrentPage(item)}
-                      className={`w-7 h-7 rounded-lg text-xs font-black transition-all cursor-pointer ${currentPage === item
-                        ? 'bg-sky-600 text-white shadow-xs shadow-sky-600/30'
-                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                        }`}
-                    >
-                      {item}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-extrabold text-slate-700 transition-colors shadow-2xs cursor-pointer"
-              >
-                Selanjutnya
-              </button>
-            </div>
-          </div>
+          {/* Reusable Server-Side Pagination Component */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalTamu}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            pageSizeOptions={[5, 10, 25, 50, 100]}
+            itemLabel="Total Tamu"
+          />
         </div>
 
       </div>
 
       {/* Photo Preview Modal */}
-      {previewPhoto && (
-        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
-          <div className="relative max-w-2xl w-full bg-white rounded-2xl p-2 shadow-2xl">
-            <button
-              onClick={() => setPreviewPhoto(null)}
-              className="absolute top-4 right-4 z-10 bg-slate-900/80 text-white p-2 rounded-full hover:bg-slate-900 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img
-              src={previewPhoto}
-              alt="Preview Snap"
-              className="w-full h-auto max-h-[80vh] rounded-xl object-contain"
-            />
-          </div>
-        </div>
-      )}
+      <TamuFoto photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />
 
-      {/* Detail Guest Modal */}
-      {detailGuest && (
-        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
-            <div className="bg-slate-950 text-white px-5 py-3 flex items-center justify-between shrink-0">
-              <h3 className="font-bold text-sm">Detail Informasi Tamu</h3>
-              <button onClick={() => setDetailGuest(null)} className="cursor-pointer">
-                <X className="w-5 h-5 text-slate-300 hover:text-white" />
-              </button>
-            </div>
-            <div className="p-5 space-y-3 text-xs overflow-y-auto flex-1">
-              {detailGuest.foto ? (
-                <div className="text-center mb-3">
-                  <img
-                    src={detailGuest.foto}
-                    alt={detailGuest.nama}
-                    onClick={() => setPreviewPhoto(detailGuest.foto)}
-                    className="w-36 h-36 mx-auto rounded-2xl object-cover border-4 border-sky-400 shadow-lg cursor-pointer hover:scale-105 transition-all"
-                  />
-                  <span className="text-[10px] font-bold text-sky-600 mt-1 block">
-                    Klik foto untuk memperbesar
-                  </span>
-                </div>
-              ) : (
-                <div className="w-28 h-28 mx-auto rounded-2xl bg-slate-100 border-2 border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-3">
-                  <User className="w-10 h-10 mb-1" />
-                  <span className="text-[10px] font-bold">Tanpa Foto</span>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-slate-400 font-bold block">No Registration:</span>
-                  <span className="font-black text-blue-600">{detailGuest.no_reg}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">Status:</span>
-                  <span className="font-bold text-slate-800">{detailGuest.status}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">Nama:</span>
-                  <span className="font-bold text-slate-800">{detailGuest.nama}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">Jenis Kelamin:</span>
-                  <span className="font-semibold text-slate-700">{detailGuest.jenis_kelamin}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">Asal / Instansi:</span>
-                  <span className="font-bold text-slate-800">{detailGuest.asal_instansi}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">No. Telepon:</span>
-                  <span className="font-semibold text-slate-700">{detailGuest.no_telpon || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">Waktu Datang:</span>
-                  <span className="font-bold text-sky-700">{detailGuest.tanggal} ({detailGuest.jam})</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-bold block">Waktu Keluar:</span>
-                  <span className="font-bold text-emerald-700">
-                    {detailGuest.status === 'Selesai' && detailGuest.tanggal_keluar
-                      ? `${detailGuest.tanggal_keluar} (${detailGuest.jam_keluar})`
-                      : '-'}
-                  </span>
-                </div>
-              </div>
+      {/* Detail Guest Modal with Interactive Real-Time GPS Map */}
+      <TamuDetail
+        guest={detailGuest}
+        onClose={() => setDetailGuest(null)}
+        onPreviewPhoto={setPreviewPhoto}
+        onOpenMap={setSelectedLocationMap}
+      />
 
-              <div className="bg-sky-50/80 p-3 rounded-xl border border-sky-200">
-                <span className="text-blue-900 font-bold block mb-1">Bertemu: {detailGuest.bertemu}</span>
-                <span className="text-slate-700 font-semibold block">Keperluan: {detailGuest.keperluan}</span>
-                {detailGuest.alamat && (
-                  <span className="text-slate-500 text-[11px] block mt-1">Alamat: {detailGuest.alamat}</span>
-                )}
-              </div>
+      {/* Google Maps Real-Time GPS Location Modal */}
+      <TamuPeta
+        location={selectedLocationMap}
+        onClose={() => setSelectedLocationMap(null)}
+      />
 
-              {/* Lokasi Deteksi Foto / Registrasi */}
-              <button
-                type="button"
-                onClick={() => {
-                  const gMap = detailGuest;
-                  setDetailGuest(null);
-                  setSelectedLocationMap(gMap);
-                }}
-                className="w-full bg-slate-900 hover:bg-slate-950 text-slate-100 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-left shadow-sm transition-all cursor-pointer group"
-                title="Klik untuk memperbesar Peta Lokasi"
-              >
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="w-4 h-4 text-sky-400 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-sky-400 block">
-                      Lokasi Registrasi / Foto (Klik untuk Peta)
-                    </span>
-                    <span className="text-xs font-semibold text-slate-200 block mt-0.5">
-                      {detailGuest.lokasi || 'Lokasi Tidak Terdeteksi'}
-                    </span>
-                  </div>
-                </div>
-                <ExternalLink className="w-4 h-4 text-sky-400 opacity-70 group-hover:opacity-100 transition-opacity" />
-              </button>
-            </div>
-            <div className="bg-slate-100 px-5 py-3 text-right shrink-0 border-t border-slate-200">
-              <button
-                onClick={() => setDetailGuest(null)}
-                className="px-4 py-1.5 bg-slate-950 hover:bg-slate-900 text-white font-bold rounded-lg cursor-pointer"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Interactive Map Modal Popup */}
-      {selectedLocationMap && (() => {
-        const rawLoc = selectedLocationMap.lokasi || '';
-        const isNotDetected = !rawLoc || rawLoc === 'Lokasi Tidak Terdeteksi';
-
-        // Extract exact coordinates if available (e.g. -7.043512, 113.882145), otherwise use full string
-        let mapQuery = 'Kalianget, Sumenep';
-        if (!isNotDetected) {
-          const coordMatch = rawLoc.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
-          if (coordMatch) {
-            mapQuery = `${coordMatch[1]},${coordMatch[2]}`;
-          } else {
-            mapQuery = rawLoc;
-          }
-        }
-
-        return (
-          <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 backdrop-blur-xs animate-fadeIn">
-            <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 space-y-0 transform transition-all">
-
-              {/* Modal Header */}
-              <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 p-4 px-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 border border-sky-400/30 flex items-center justify-center font-bold shadow-inner shrink-0">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-black text-base tracking-wide text-white">Peta Lokasi Submit Tamu (Real-Time GPS)</h3>
-                      <span className="bg-sky-500/20 text-sky-300 font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-sky-500/30">
-                        {selectedLocationMap.no_reg}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-300 font-medium mt-0.5">
-                      Pengunjung: <strong className="text-white">{selectedLocationMap.nama}</strong> ({selectedLocationMap.asal_instansi})
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  {/* Toggle Map View Mode (Satelit vs Peta Jalan) */}
-                  <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700 flex items-center gap-1 text-[11px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setMapViewMode('k')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${mapViewMode === 'k'
-                        ? 'bg-sky-500 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-white'
-                        }`}
-                      title="Tampilan Foto Satelit / Udara"
-                    >
-                      📡 Satelit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMapViewMode('m')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${mapViewMode === 'm'
-                        ? 'bg-sky-500 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-white'
-                        }`}
-                      title="Tampilan Peta Vektor Jalan"
-                    >
-                      🗺️ Jalan
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedLocationMap(null)}
-                    className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
-                    title="Tutup Peta"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Modal Body: Spacious Interactive Map iframe */}
-              <div className="relative w-full bg-slate-100 h-[380px] sm:h-[430px] flex items-center justify-center overflow-hidden">
-                {!isNotDetected ? (
-                  <>
-                    {isMapLoading && (
-                      <div className="absolute inset-0 z-10 bg-slate-100 flex flex-col items-center justify-center text-slate-500 gap-2">
-                        <div className="w-9 h-9 border-3 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-xs font-extrabold text-slate-700">Memuat Peta Lokasi GPS...</span>
-                        <span className="text-[11px] text-slate-400">Menghubungkan ke Google Maps</span>
-                      </div>
-                    )}
-                    <iframe
-                      title="Maps Preview Presensi Tamu"
-                      width="100%"
-                      height="100%"
-                      frameBorder="0"
-                      scrolling="no"
-                      marginHeight="0"
-                      marginWidth="0"
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=${mapViewMode}&z=16&ie=UTF8&iwloc=&output=embed`}
-                      className="w-full h-full border-0 relative z-0"
-                      loading="eager"
-                      onLoad={() => setIsMapLoading(false)}
-                    ></iframe>
-                  </>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 space-y-2 p-6 text-center bg-slate-900">
-                    <MapPin className="w-12 h-12 text-slate-300 animate-bounce" />
-                    <p className="font-extrabold text-sm text-slate-200">Alamat Lokasi Tidak Terdeteksi</p>
-                    <p className="text-xs text-slate-400 max-w-sm">Tamu mendaftar tanpa izin akses lokasi GPS pada perangkatnya.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Modal Footer: Address details & Google Maps Link */}
-              <div className="bg-slate-50 p-4 px-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-                <div className="flex items-start gap-3 text-xs flex-1">
-                  <MapPin className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
-                      Titik Presensi Terdeteksi Perangkat:
-                    </span>
-                    <p className="font-bold text-slate-800 text-xs mt-0.5 leading-relaxed">
-                      {rawLoc || 'Lokasi Tidak Terdeteksi'}
-                    </p>
-                    <span className="text-[11px] font-medium text-slate-500 block mt-1">
-                      Waktu Registrasi: <strong className="text-slate-700">{selectedLocationMap.tanggal} jam {selectedLocationMap.jam} WIB</strong>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                  {!isNotDetected && (
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 sm:flex-none px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-sky-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer border border-sky-500"
-                    >
-                      <ExternalLink className="w-4 h-4 text-sky-100" />
-                      <span>Buka Navigasi Google Maps</span>
-                    </a>
-                  )}
-
-                  <button
-                    onClick={() => setSelectedLocationMap(null)}
-                    className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
-                  >
-                    Tutup
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Custom Delete Confirmation Modal */}
-      {guestToDelete && (
-        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-rose-100 text-center space-y-4">
-            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-slate-800 text-base">Konfirmasi Hapus Data</h3>
-              <p className="text-xs font-medium text-slate-500 mt-1">
-                Apakah Anda yakin ingin menghapus data tamu <strong className="text-slate-800">{guestToDelete.nama}</strong> ({guestToDelete.no_reg})?
-              </p>
-            </div>
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={() => setGuestToDelete(null)}
-                disabled={deleting}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                onClick={executeDelete}
-                disabled={deleting}
-                className="flex-1 py-2.5 px-4 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-rose-500/20 cursor-pointer"
-              >
-                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteModal
+        isOpen={!!guestToDelete}
+        onClose={() => setGuestToDelete(null)}
+        onConfirm={executeDelete}
+        loading={deleting}
+        itemName={guestToDelete?.nama}
+        itemCode={guestToDelete?.no_reg}
+      />
+
+      {/* Custom Status Change Confirmation Modal */}
+      <StatusConfirmModal
+        isOpen={!!statusConfirmTarget}
+        currentStatus={statusConfirmTarget?.currentStatus}
+        onClose={closeStatusConfirm}
+        onConfirm={executeStatusToggle}
+        loading={statusUpdating}
+      />
 
 
       {/* Visitor Badge / Struk Modal */}
@@ -915,113 +428,12 @@ const DaftarKunjungan = () => {
       )}
 
       {/* Excel Export Options Modal */}
-      {showExportModal && (
-        <div className="fixed -top-10 -bottom-10 -left-10 -right-10 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-emerald-100 overflow-hidden space-y-0">
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-200" />
-                <h3 className="font-extrabold text-sm">Download Laporan Excel</h3>
-              </div>
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="text-emerald-100 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-3">
-              <p className="text-xs font-semibold text-slate-600 mb-2">
-                Pilih jenis periode laporan kunjungan tamu yang ingin di-download dalam format Microsoft Excel (.xlsx):
-              </p>
-
-              {/* Custom Month & Year Selector Card */}
-              <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/60 space-y-3">
-                <div className="flex items-center gap-2 text-sky-900 font-extrabold text-xs">
-                  <Calendar className="w-4 h-4 text-sky-600" />
-                  <span>Pilih Bulan & Tahun Laporan:</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Bulan</label>
-                    <select
-                      value={exportMonth}
-                      onChange={(e) => setExportMonth(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-sky-400 focus:outline-hidden"
-                    >
-                      {BULAN_OPTIONS.map((b) => (
-                        <option key={b.value} value={b.value}>
-                          {b.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Tahun</label>
-                    <select
-                      value={exportYear}
-                      onChange={(e) => setExportYear(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-sky-400 focus:outline-hidden"
-                    >
-                      {TAHUN_OPTIONS.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleExportSelectedMonthYear}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-xs rounded-xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer border border-emerald-500"
-                >
-                  <Download className="w-4 h-4 text-emerald-100" />
-                  <span>Download Laporan ({BULAN_OPTIONS.find(b => b.value === exportMonth)?.label} {exportYear})</span>
-                </button>
-              </div>
-
-
-
-              {/* Filtered Data Option */}
-              <button
-                onClick={handleExportCurrent}
-                className="w-full p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50/50 hover:bg-emerald-50/50 flex items-center justify-between text-left group transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black group-hover:scale-105 transition-transform">
-                    <FileSpreadsheet className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-xs text-slate-800 block group-hover:text-emerald-900">
-                      Laporan Sesuai Filter Saat Ini ({tamuList.length} Tamu)
-                    </span>
-                    <span className="text-[11px] font-medium text-slate-500 block">
-                      Export data berdasarkan kata kunci / filter tanggal aktif
-                    </span>
-                  </div>
-                </div>
-                <Download className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
-              </button>
-            </div>
-
-            <div className="bg-slate-50 px-5 py-3 text-right border-t border-slate-100">
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Flash Notification Toast */}
-      <Flash toast={toast} onClose={() => setToast(null)} />
+      <TamuExport
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        tamuList={tamuList}
+        showToast={showToast}
+      />
     </AdminLayout>
   );
 };

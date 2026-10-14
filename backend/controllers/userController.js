@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { User, ActivityLog } = require('../models');
+const { resolveActor } = require('../utils/actorHelper');
 
 // GET /api/users - Get all users
 exports.getAllUsers = async (req, res) => {
@@ -63,9 +64,10 @@ exports.createUser = async (req, res) => {
     });
 
     // Record Activity Log
+    const { actorNama: createActor, userId: createActorId } = await resolveActor(req, 'Admin');
     await ActivityLog.create({
-      user_nama: req.user ? req.user.nama : 'Admin',
-      user_id: req.user ? req.user.id : null,
+      user_nama: createActor,
+      user_id: createActorId,
       action: 'TAMBAH_USER',
       details: `Menambahkan akun user baru: ${username} (${role || 'user'})`
     });
@@ -103,11 +105,30 @@ exports.updateUser = async (req, res) => {
 
     if (role) {
       const rawRole = role.toLowerCase().trim();
-      if (rawRole === 'koordinator' || rawRole === 'kordinator') {
-        updateData.role = 'kordinator';
-      } else if (allowedRoles.includes(rawRole)) {
-        updateData.role = rawRole;
+      const targetRole = (rawRole === 'koordinator' || rawRole === 'kordinator')
+        ? 'kordinator'
+        : (allowedRoles.includes(rawRole) ? rawRole : user.role);
+
+      // Guard: Jika akun ini adalah Admin dan ingin diubah menjadi non-admin
+      if (user.role === 'admin' && targetRole !== 'admin') {
+        const adminCount = await User.count({ where: { role: 'admin' } });
+        if (adminCount <= 1) {
+          return res.status(400).json({
+            success: false,
+            message: 'Tidak dapat mengubah role Admin terakhir di sistem. Minimal satu akun Admin harus tetap aktif.'
+          });
+        }
       }
+
+      // Guard: Mencegah admin mendowngrade rolenya sendiri secara tidak sengaja
+      if (req.user && Number(req.user.id) === Number(user.id) && targetRole !== 'admin') {
+        return res.status(400).json({
+          success: false,
+          message: 'Tidak dapat menurunkan (downgrade) hak akses akun Anda sendiri yang sedang aktif.'
+        });
+      }
+
+      updateData.role = targetRole;
     }
 
     if (username && username !== user.username) {
@@ -132,9 +153,10 @@ exports.updateUser = async (req, res) => {
     await user.update(updateData);
 
     // Record Activity Log
+    const { actorNama: updateActor, userId: updateActorId } = await resolveActor(req, 'Admin');
     await ActivityLog.create({
-      user_nama: req.user ? req.user.nama : 'Admin',
-      user_id: req.user ? req.user.id : null,
+      user_nama: updateActor,
+      user_id: updateActorId,
       action: 'UPDATE_USER',
       details: `Memperbarui akun user: ${user.username}`
     });
@@ -163,13 +185,33 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
     }
 
+    // Guard 1: Self-deletion guard (Admin tidak dapat menghapus akunnya sendiri yang sedang aktif)
+    if (req.user && Number(req.user.id) === Number(user.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tidak dapat menghapus akun Anda sendiri yang sedang aktif digunakan.'
+      });
+    }
+
+    // Guard 2: Last-admin protection (Admin terakhir tidak dapat dihapus)
+    if (user.role === 'admin') {
+      const adminCount = await User.count({ where: { role: 'admin' } });
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tidak dapat menghapus Admin terakhir di sistem. Minimal satu akun Admin harus tetap aktif.'
+        });
+      }
+    }
+
     const deletedUsername = user.username;
     await user.destroy();
 
     // Record Activity Log
+    const { actorNama: deleteActor, userId: deleteActorId } = await resolveActor(req, 'Admin');
     await ActivityLog.create({
-      user_nama: req.user ? req.user.nama : 'Admin',
-      user_id: req.user ? req.user.id : null,
+      user_nama: deleteActor,
+      user_id: deleteActorId,
       action: 'HAPUS_USER',
       details: `Menghapus akun user: ${deletedUsername}`
     });

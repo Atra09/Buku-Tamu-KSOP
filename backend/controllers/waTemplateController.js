@@ -1,41 +1,18 @@
-const { WaTemplate, ActivityLog, User } = require('../models');
-const { Op } = require('sequelize');
-
-const resolveActor = async (req) => {
-  let actorNama = 'Admin';
-  let userId = null;
-
-  if (req.user) {
-    actorNama = req.user.nama || req.user.username || 'Admin';
-    userId = req.user.id || null;
-  } else if (req.headers['x-user-nama']) {
-    actorNama = decodeURIComponent(req.headers['x-user-nama']);
-    try {
-      const matched = await User.findOne({
-        where: {
-          [Op.or]: [
-            { nama: actorNama },
-            { username: actorNama }
-          ]
-        }
-      });
-      if (matched) {
-        userId = matched.id;
-      }
-    } catch (e) {}
-  }
-
-  return { actorNama, userId };
-};
+const { WaTemplate, ActivityLog } = require('../models');
+const { resolveActor } = require('../utils/actorHelper');
+const { DEFAULT_WA_TEMPLATE } = require('../utils/waTemplateHelper');
 
 // GET /api/wa-templates - Get all WA templates
 exports.getTemplates = async (req, res) => {
   try {
-    await WaTemplate.sync();
     const templates = await WaTemplate.findAll({
       order: [['id', 'ASC']]
     });
-    return res.status(200).json({ success: true, data: templates });
+    return res.status(200).json({
+      success: true,
+      defaultTemplate: DEFAULT_WA_TEMPLATE,
+      data: templates
+    });
   } catch (err) {
     console.error('[WaTemplate Controller Error]:', err);
     return res.status(500).json({ success: false, message: 'Gagal mengambil data template WA' });
@@ -45,7 +22,6 @@ exports.getTemplates = async (req, res) => {
 // POST /api/wa-templates - Create a new custom template
 exports.createTemplate = async (req, res) => {
   try {
-    await WaTemplate.sync();
     const { nama_template, isi_pesan } = req.body;
 
     if (!nama_template || !isi_pesan) {

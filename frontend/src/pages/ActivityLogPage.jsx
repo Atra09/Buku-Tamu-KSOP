@@ -2,18 +2,30 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AdminLayout from '../components/AdminLayout';
 import { Search, RefreshCw, Clock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import Pagination from '../components/common/pagination';
 
 const ActivityLogPage = () => {
+  const { user } = useAuth();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [userRoleMap, setUserRoleMap] = useState({});
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [totalLogs, setTotalLogs] = useState(0);
+
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [user]);
 
   const fetchUsers = async () => {
+    const roleStr = (user?.role || '').toLowerCase();
+    const isAdmin = roleStr === 'admin' || roleStr === 'superuser' || roleStr === 'super user';
+    if (!isAdmin) return; // Non-admin (koordinator/user) tidak memiliki izin ke tabel user; gunakan role enrichment bawaan backend
+
     try {
       const res = await axios.get('/api/users');
       if (res.data && res.data.data) {
@@ -30,14 +42,23 @@ const ActivityLogPage = () => {
     }
   };
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (targetPage = currentPage, targetLimit = itemsPerPage) => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/logs', {
-        params: { search: searchQuery }
-      });
-      if (res.data.success) {
-        setLogs(res.data.data);
+      const isAll = targetLimit === 'Semua' || targetLimit === 'all' || targetLimit === 'semua';
+      const actualLimit = isAll ? 1000 : Number(targetLimit);
+      const actualOffset = isAll ? 0 : (targetPage - 1) * actualLimit;
+
+      const params = {
+        limit: actualLimit,
+        offset: actualOffset
+      };
+      if (searchQuery) params.search = searchQuery;
+
+      const res = await axios.get('/api/logs', { params });
+      if (res.data && res.data.success) {
+        setLogs(res.data.data || []);
+        setTotalLogs(typeof res.data.total === 'number' ? res.data.total : (res.data.data || []).length);
       }
     } catch (err) {
       console.error('Error fetching logs:', err);
@@ -47,8 +68,24 @@ const ActivityLogPage = () => {
   };
 
   useEffect(() => {
-    fetchLogs();
+    setCurrentPage(1);
+    fetchLogs(1, itemsPerPage);
   }, [searchQuery]);
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchLogs(newPage, itemsPerPage);
+  };
+
+  const handleItemsPerPageChange = (newLimit) => {
+    setItemsPerPage(newLimit);
+    setCurrentPage(1);
+    fetchLogs(1, newLimit);
+  };
+
+  const isCurrentAll = itemsPerPage === 'Semua' || itemsPerPage === 'all' || itemsPerPage === 'semua';
+  const totalPages = isCurrentAll ? 1 : (Math.ceil(totalLogs / Number(itemsPerPage)) || 1);
+  const startIndex = isCurrentAll ? 0 : (currentPage - 1) * Number(itemsPerPage);
 
   const getActionBadge = (action) => {
     switch (action) {
@@ -69,12 +106,15 @@ const ActivityLogPage = () => {
       case 'TAMBAH_TUJUAN':
       case 'TAMBAH_KATEGORI_ASAL':
       case 'TAMBAH_KEPERLUAN':
+      case 'TAMBAH_JADWAL':
         return 'bg-teal-50 text-teal-600 border-teal-200/60';
       case 'EDIT_TUJUAN':
       case 'EDIT_KATEGORI_ASAL':
+      case 'EDIT_JADWAL':
         return 'bg-cyan-50 text-cyan-600 border-cyan-200/60';
       case 'HAPUS_TUJUAN':
       case 'HAPUS_KATEGORI_ASAL':
+      case 'HAPUS_JADWAL':
         return 'bg-rose-50 text-rose-600 border-rose-200/60';
       default:
         return 'bg-slate-50 text-slate-600 border-slate-200/60';
@@ -86,17 +126,13 @@ const ActivityLogPage = () => {
 
     // Layer 1: Check current logged-in session user
     let sessionRole = '';
-    try {
-      const stored = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-      if (stored) {
-        const loggedUser = JSON.parse(stored);
-        const loggedNama = (loggedUser.nama || '').toLowerCase().trim();
-        const loggedUserNama = (loggedUser.username || '').toLowerCase().trim();
-        if (namaClean && (namaClean === loggedNama || namaClean === loggedUserNama)) {
-          sessionRole = (loggedUser.role || '').toLowerCase().trim();
-        }
+    if (user) {
+      const loggedNama = (user.nama || '').toLowerCase().trim();
+      const loggedUserNama = (user.username || '').toLowerCase().trim();
+      if (namaClean && (namaClean === loggedNama || namaClean === loggedUserNama)) {
+        sessionRole = (user.role || '').toLowerCase().trim();
       }
-    } catch (e) {}
+    }
 
     const mapRole = userRoleMap[namaClean] || '';
     const role = (sessionRole || mapRole || log.user_role || log.User?.role || log.user?.role || '').toLowerCase().trim();
@@ -150,7 +186,7 @@ const ActivityLogPage = () => {
           />
         </div>
         <button
-          onClick={fetchLogs}
+          onClick={() => fetchLogs(currentPage, itemsPerPage)}
           className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer shrink-0"
         >
           <RefreshCw className="w-4 h-4 text-slate-500" />
@@ -185,7 +221,7 @@ const ActivityLogPage = () => {
                   const logDate = new Date(log.createdAt);
                   return (
                     <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-4 px-6 text-center font-bold text-slate-400">{index + 1}</td>
+                      <td className="py-4 px-6 text-center font-bold text-slate-400">{startIndex + index + 1}</td>
                       <td className="py-4 px-6 font-mono text-slate-600">
                         <div className="flex items-center gap-1.5 font-bold text-slate-800">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -226,6 +262,19 @@ const ActivityLogPage = () => {
             </table>
           </div>
         )}
+
+        {/* Server-Side Pagination Component */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalLogs}
+          itemsPerPage={itemsPerPage}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          pageSizeOptions={[5, 10, 25, 50, 100, 'Semua']}
+          prefixLabel="dari total"
+          itemLabel="log"
+        />
       </div>
     </AdminLayout>
   );

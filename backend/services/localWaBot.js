@@ -1,4 +1,5 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const qrcodeTerminal = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const path = require('path');
@@ -33,7 +34,8 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
-      browser: ['KSOP Si-Tamu Local Bot', 'Chrome', '1.0.0']
+      browser: ['KSOP Si-Tamu Local Bot', 'Chrome', '1.0.0'],
+      logger: pino({ level: 'silent' })
     });
 
     sock.ev.on('creds.update', saveCreds);

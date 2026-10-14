@@ -1,31 +1,42 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { UserCheck, Camera } from 'lucide-react';
 import Header from '../components/Header';
-import WebcamCapture from '../components/WebcamCapture';
 import VisitorBadgeModal from '../components/VisitorBadgeModal';
-import Flash from '../components/flash/flash';
 import NotifPopup from '../components/flash/NotifPopup';
+import RegFlash from '../components/regflash';
+import GuestRegistrationForm from '../components/tamu/GuestRegistrationForm';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useQrTicket } from '../hooks/useQrTicket';
 
+const INITIAL_FORM_STATE = {
+  nama: '',
+  no_telpon: '',
+  kategori_asal: '',
+  asal_instansi: '',
+  jenis_kelamin: 'Laki-laki',
+  alamat: '',
+  lokasi: '',
+  bertemu: '',
+  keperluan: ''
+};
+
+/**
+ * PublicKsop (Halaman Pendaftaran Buku Tamu Digital KSOP)
+ * Mengorkestrasi manajemen sesi tiket QR, pengambilan dropdown master,
+ * validasi form, pengiriman data tamu, dan modal notifikasi.
+ */
 const PublicKsop = () => {
-  const [formData, setFormData] = useState({
-    nama: '',
-    no_telpon: '',
-    kategori_asal: '',
-    asal_instansi: '',
-    jenis_kelamin: 'Laki-laki',
-    alamat: '',
-    lokasi: '',
-    bertemu: '',
-    keperluan: ''
-  });
-
+  const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [fotoBase64, setFotoBase64] = useState(null);
+
+  // Master dropdown data
   const [tujuanList, setTujuanList] = useState([]);
   const [tujuanObjects, setTujuanObjects] = useState([]);
   const [keperluanList, setKeperluanList] = useState([]);
   const [kategoriAsalList, setKategoriAsalList] = useState([]);
   const [kategoriAsalObjects, setKategoriAsalObjects] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [registeredGuest, setRegisteredGuest] = useState(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
@@ -35,15 +46,19 @@ const PublicKsop = () => {
 
   const latestLocationRef = useRef('');
 
-  // Toast Notification State
-  const [toast, setToast] = useState(null);
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
-  const showToast = (message, type = 'error') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 4000);
-  };
+  // QR Ticket Lifecycle Hook
+  const {
+    qrToken,
+    isGuestContext,
+    qrStatus,
+    regPopup,
+    setRegPopup,
+    handleTimerExpire,
+    markTokenSubmitted
+  } = useQrTicket();
 
   useEffect(() => {
     fetchDropdowns();
@@ -52,7 +67,7 @@ const PublicKsop = () => {
       showToast(loginFlash, 'success');
       sessionStorage.removeItem('sitamu_login_flash');
     }
-  }, []);
+  }, [showToast]);
 
   const fetchDropdowns = async () => {
     try {
@@ -78,7 +93,7 @@ const PublicKsop = () => {
       }
     } catch (err) {
       console.error('Error fetching dropdowns:', err);
-      // Fallbacks
+      // Fallback data
       setTujuanList([
         'Kepala Kantor',
         'Seksi Keselamatan Berlayar',
@@ -102,9 +117,7 @@ const PublicKsop = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'no_telpon') {
-      // Hapus semua karakter yang bukan angka (0-9) dan tanda '+'
       let cleaned = value.replace(/[^0-9+]/g, '');
-      // Pastikan tanda '+' hanya bisa ada di karakter pertama (misal +62)
       if (cleaned.includes('+')) {
         cleaned = '+' + cleaned.replace(/\+/g, '');
       }
@@ -114,32 +127,48 @@ const PublicKsop = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const checkIsOnlyAddress = (kategoriName) => {
+  const checkIsOnlyAddress = useCallback((kategoriName) => {
     const selectedCatObj = kategoriAsalObjects.find(k => k.nama_kategori === kategoriName);
     if (selectedCatObj) {
       const val = selectedCatObj.butuh_instansi;
       if (val === false || val === 0 || val === 'false' || val === '0') return true;
       if (val === true || val === 1 || val === 'true' || val === '1') return false;
     }
-    return kategoriName && kategoriName.toLowerCase().includes('masyarakat');
+    return Boolean(kategoriName && kategoriName.toLowerCase().includes('masyarakat'));
+  }, [kategoriAsalObjects]);
+
+  const sanitizeText = (str) => {
+    if (typeof str !== 'string') return '';
+    return str.replace(/\0/g, '').replace(/[<>]/g, '').trim();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const isOnlyAddress = checkIsOnlyAddress(formData.kategori_asal);
 
-    if (!formData.nama.trim()) {
+    const cleanNama = sanitizeText(formData.nama);
+    const cleanAlamat = sanitizeText(formData.alamat);
+    const cleanAsalInstansi = sanitizeText(formData.asal_instansi);
+    const cleanKeperluan = sanitizeText(formData.keperluan);
+    const cleanNoTelpon = formData.no_telpon.trim();
+
+    if (!cleanNama) {
       showToast('Mohon isi Nama Tamu!', 'error');
       return;
     }
 
-    if (isOnlyAddress && !formData.alamat.trim()) {
+    if (isOnlyAddress && !cleanAlamat) {
       showToast('Mohon isi Alamat Lengkap / Domisili Tamu!', 'error');
       return;
     }
 
-    if (!isOnlyAddress && !formData.asal_instansi.trim()) {
+    if (!isOnlyAddress && !cleanAsalInstansi) {
       showToast('Mohon isi Nama Asal Instansi / Perusahaan!', 'error');
+      return;
+    }
+
+    if (!cleanKeperluan) {
+      showToast('Mohon isi Keperluan / Catatan Kunjungan!', 'error');
       return;
     }
 
@@ -150,32 +179,57 @@ const PublicKsop = () => {
 
     setLoading(true);
     try {
-      const isInvalid = (val) => !val || !val.trim() || val === 'Lokasi Tidak Terdeteksi' || val === 'Mendeteksi Lokasi...';
+      const isInvalid = (val) => !val || !val.trim() ||
+        val === 'Lokasi Tidak Terdeteksi' ||
+        val === 'Mendeteksi Lokasi...' ||
+        val.startsWith('Perangkat tidak mendukung') ||
+        val.startsWith('Gagal mendeteksi') ||
+        val.startsWith('Akses Lokasi Ditolak') ||
+        val.startsWith('Waktu Deteksi');
 
       let validLokasi = formData.lokasi;
       if (isInvalid(validLokasi)) {
         validLokasi = latestLocationRef.current;
       }
+
+      // Validasi Area Lokasi Kantor KSOP Kalianget (Wajib Terdeteksi GPS Asli untuk Semua: Tamu maupun Petugas)
       if (isInvalid(validLokasi)) {
-        validLokasi = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
+        showToast('Lokasi belum terdeteksi. Pastikan GPS aktif dan berikan izin lokasi pada browser Anda.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      // Ambil hanya teks nama lokasi (di dalam tanda kurung / abaikan angka koordinat) untuk validasi wilayah
+      const addressMatch = validLokasi.match(/\((.*?)\)/);
+      const addressOnly = (addressMatch && addressMatch[1])
+        ? addressMatch[1].trim()
+        : validLokasi.replace(/^[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*/, '').trim();
+
+      if (!addressOnly || !addressOnly.toLowerCase().includes('kalianget')) {
+        showToast('Pendaftaran ditolak: Anda terdeteksi berada di luar area kantor KSOP (Jalan Raya Kalianget, Desa Kalianget Timur, Kab. Sumenep).', 'error');
+        setLoading(false);
+        return;
       }
 
       const finalAsalInstansi = isOnlyAddress
         ? (formData.kategori_asal || 'Masyarakat Umum')
-        : formData.asal_instansi.trim();
+        : cleanAsalInstansi;
 
       const payload = {
         ...formData,
+        nama: cleanNama,
+        no_telpon: cleanNoTelpon,
+        alamat: cleanAlamat,
         asal_instansi: finalAsalInstansi,
+        keperluan: cleanKeperluan,
         lokasi: validLokasi,
-        foto_base64: fotoBase64
+        foto_base64: fotoBase64,
+        qr_token: qrStatus.valid ? qrToken : undefined
       };
 
-      const userStr = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-      const userObj = userStr ? JSON.parse(userStr) : null;
       const headers = {};
-      if (userObj && (userObj.nama || userObj.username)) {
-        headers['x-user-nama'] = encodeURIComponent(userObj.nama || userObj.username);
+      if (qrStatus.valid && qrToken) {
+        headers['x-qr-token'] = qrToken;
       }
 
       const res = await axios.post('/api/tamu', payload, { headers });
@@ -194,37 +248,46 @@ const PublicKsop = () => {
         setShowBadgeModal(true);
 
         const targetPejabatLabel = guestData.bertemu || 'Tujuan Kunjungan';
-
         showToast(`Kunjungan Anda telah disampaikan kepada ${targetPejabatLabel}`, 'success');
 
-        // Record CETAK_KARTU_TAMU activity log
+        // Catat log cetak kartu tamu
         axios.post('/api/logs', {
           action: 'CETAK_KARTU_TAMU',
           details: `Mencetak Kartu Kunjungan Tamu: ${guestData.nama} (${guestData.no_reg})`
         }, { headers }).catch(logErr => console.error('Error logging CETAK_KARTU_TAMU:', logErr));
 
-        // Complete Reset Form & Photo
-        setFormData(prev => ({
-          nama: '',
-          no_telpon: '',
-          kategori_asal: kategoriAsalList.length > 0 ? kategoriAsalList[0] : prev.kategori_asal,
-          asal_instansi: '',
-          jenis_kelamin: 'Laki-laki',
-          alamat: '',
+        // Reset Formulir & Foto
+        setFormData({
+          ...INITIAL_FORM_STATE,
+          kategori_asal: kategoriAsalList.length > 0 ? kategoriAsalList[0] : '',
           lokasi: latestLocationRef.current || '',
-          bertemu: tujuanList.length > 0 ? tujuanList[0] : prev.bertemu,
-          keperluan: keperluanList.length > 0 ? keperluanList[0] : prev.keperluan
-        }));
+          bertemu: tujuanList.length > 0 ? tujuanList[0] : '',
+          keperluan: keperluanList.length > 0 ? keperluanList[0] : ''
+        });
         setFotoBase64(null);
+
+        // Jika pendaftaran via QR, tandai tiket selesai digunakan pada perangkat ini
+        if (isGuestContext || qrToken) {
+          markTokenSubmitted(qrToken, guestData.no_reg);
+        }
       }
     } catch (err) {
       console.error('Error registering guest:', err);
       const errData = err.response?.data;
       if (errData?.botNotConnected || (errData?.message && errData.message.toLowerCase().includes('bot belum terhubung'))) {
-        setToast(null); // Memastikan flash toast TIDAK muncul bersamaan
         setBotPopup({
           isOpen: true,
           message: errData.message || 'bot belum terhubung, silahkan hubungi admin !!'
+        });
+      } else if (errData?.code === 'LOCATION_OUTSIDE_KSOP') {
+        showToast(errData.message || 'Pendaftaran ditolak: Anda terdeteksi berada di luar area kantor KSOP.', 'error');
+      } else if (errData?.code === 'QR_TOKEN_EXPIRED' || errData?.code === 'QR_TOKEN_NOT_ACTIVE' || errData?.code === 'INVALID_QR_TOKEN') {
+        setRegPopup({
+          isOpen: true,
+          type: 'error',
+          title: 'Sesi Tiket Barcode Telah Berakhir',
+          message: errData.message || 'Masa berlaku tiket barcode telah habis.',
+          subMessage: 'Silakan minta barcode terbaru kepada petugas!'
         });
       } else {
         showToast('Gagal menyimpan registrasi tamu: ' + (errData?.message || err.message), 'error');
@@ -236,233 +299,30 @@ const PublicKsop = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans pb-12">
-      <Header companyName="KSOP Si-Tamu" />
+      <Header
+        companyName="KSOP Si-Tamu"
+        guestMode={isGuestContext}
+        expiresAt={qrStatus.expiresAt}
+        onTimerExpire={() => handleTimerExpire(Boolean(registeredGuest))}
+      />
 
       <main className="w-full px-4 md:px-8 xl:px-12 mt-4 flex-1">
-        {/* Seamless Form directly on main background */}
-        <form onSubmit={handleSubmit} className="w-full">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-
-            {/* Inputs Left Column */}
-            <div className="md:col-span-7 space-y-3.5 bg-white/95 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5 h-fit">
-              <div className="border-b border-sky-100 pb-3 mb-2">
-                <h3 className="font-extrabold text-lg text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-sky-500" />
-                  Form Registrasi Tamu
-                </h3>
-              </div>
-
-              {/* Row 1: Nama Tamu & Jenis Kelamin (50-50 Width Grid) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                    Nama Tamu <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="nama"
-                    value={formData.nama}
-                    onChange={handleChange}
-                    placeholder="Masukkan nama lengkap"
-                    required
-                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                    Jenis Kelamin <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="jenis_kelamin"
-                    value={formData.jenis_kelamin}
-                    onChange={handleChange}
-                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
-                  >
-                    <option value="Laki-laki">Laki-laki</option>
-                    <option value="Perempuan">Perempuan</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 2: No Telpon & Kategori Asal (50-50 Width Grid) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1">No Telpon / WhatsApp</label>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    name="no_telpon"
-                    value={formData.no_telpon}
-                    onChange={handleChange}
-                    placeholder="Nomor HP / WhatsApp (cth: 0812... / +628...)"
-                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                    Kategori Asal
-                  </label>
-                  <select
-                    name="kategori_asal"
-                    value={formData.kategori_asal}
-                    onChange={handleChange}
-                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
-                  >
-                    {kategoriAsalList.map((kat, idx) => (
-                      <option key={idx} value={kat}>{kat}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Conditional Fields based on Dynamic Kategori Asal Configuration */}
-              {checkIsOnlyAddress(formData.kategori_asal) ? (
-                /* Only Show Alamat Lengkap for Masyarakat Umum / Domisili */
-                <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                    Alamat Lengkap / Domisili <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    name="alamat"
-                    rows="3"
-                    value={formData.alamat}
-                    onChange={handleChange}
-                    placeholder="Masukkan alamat lengkap / desa / kecamatan domisili Anda"
-                    required
-                    className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
-                  />
-                </div>
-              ) : (
-                /* Show Asal Instansi AND Alamat Detail for Instansi / Perusahaan / Lainnya */
-                <>
-                  <div>
-                    <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                      Asal Instansi / Perusahaan <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="asal_instansi"
-                      value={formData.asal_instansi}
-                      onChange={handleChange}
-                      placeholder="Nama Instansi, Dinas, atau Perusahaan Asal"
-                      required
-                      className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[13px] font-bold text-slate-700 mb-1">Alamat Lengkap Instansi</label>
-                    <textarea
-                      name="alamat"
-                      rows="2"
-                      value={formData.alamat}
-                      onChange={handleChange}
-                      placeholder="Alamat detail instansi / kantor"
-                      className="w-full text-[13px] font-semibold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Bertemu Dropdown */}
-              <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                  Bertemu (Tujuan) <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="bertemu"
-                  value={formData.bertemu}
-                  onChange={handleChange}
-                  required
-                  className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 shadow-xs cursor-pointer focus:bg-white"
-                >
-                  {tujuanList.map((t, idx) => (
-                    <option key={idx} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Keperluan / Catatan Kunjungan Text Area */}
-              <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1">
-                  Keperluan / Catatan Kunjungan <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  name="keperluan"
-                  rows="2"
-                  value={formData.keperluan}
-                  onChange={handleChange}
-                  placeholder="Tuliskan keperluan / catatan kunjungan Anda di sini..."
-                  required
-                  className="w-full text-[13px] font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all bg-slate-50/50 text-slate-800 resize-none shadow-xs focus:bg-white"
-                />
-              </div>
-            </div>
-
-            {/* Camera Right Column */}
-            <div className="md:col-span-5 flex flex-col justify-between bg-white/95 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-sky-100 shadow-xl shadow-sky-900/5 h-fit">
-              <div className="flex-1 flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-3 border-b border-sky-100 pb-3">
-                  <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
-                    <Camera className="w-4 h-4 text-sky-500" />
-                    Foto
-                  </span>
-                </div>
-
-                <WebcamCapture
-                  onCapture={(base64, loc) => {
-                    setFotoBase64(base64);
-                    const isInvalid = (val) => !val || !val.trim() || val === 'Lokasi Tidak Terdeteksi' || val === 'Mendeteksi Lokasi...';
-                    if (!isInvalid(loc)) {
-                      latestLocationRef.current = loc;
-                      setFormData(prev => ({ ...prev, lokasi: loc }));
-                    } else if (isInvalid(formData.lokasi)) {
-                      const fallback = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
-                      latestLocationRef.current = fallback;
-                      setFormData(prev => ({ ...prev, lokasi: fallback }));
-                    }
-                  }}
-                  onLocationChange={(loc) => {
-                    const isInvalid = (val) => !val || !val.trim() || val === 'Lokasi Tidak Terdeteksi' || val === 'Mendeteksi Lokasi...';
-                    if (!isInvalid(loc)) {
-                      latestLocationRef.current = loc;
-                      setFormData(prev => ({ ...prev, lokasi: loc }));
-                    } else if (isInvalid(formData.lokasi)) {
-                      const fallback = 'Desa Gapura, Kec. Kota Sumenep, Kab. Sumenep';
-                      latestLocationRef.current = fallback;
-                      setFormData(prev => ({ ...prev, lokasi: fallback }));
-                    }
-                  }}
-                  currentPhoto={fotoBase64}
-                />
-              </div>
-
-              <div className="mt-2.5 pt-2 border-t border-sky-100">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3.5 px-6 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 active:scale-[0.98] text-white font-black text-base rounded-xl shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer border border-sky-300/30"
-                >
-                  {loading ? (
-                    <span>Memproses Registrasi...</span>
-                  ) : (
-                    <>
-                      <span>Submit Data Tamu</span>
-                      <Camera className="w-5 h-5" />
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </form>
+        <GuestRegistrationForm
+          formData={formData}
+          handleChange={handleChange}
+          kategoriAsalList={kategoriAsalList}
+          tujuanList={tujuanList}
+          checkIsOnlyAddress={checkIsOnlyAddress}
+          fotoBase64={fotoBase64}
+          setFotoBase64={setFotoBase64}
+          latestLocationRef={latestLocationRef}
+          setFormData={setFormData}
+          loading={loading}
+          qrStatus={qrStatus}
+          isGuestContext={isGuestContext}
+          onSubmit={handleSubmit}
+        />
       </main>
-
-      {/* Flash Notification Toast */}
-      <Flash toast={toast} onClose={() => setToast(null)} />
 
       {/* Dedicated WA Bot Disconnected Pop-up Modal */}
       <NotifPopup
@@ -471,11 +331,33 @@ const PublicKsop = () => {
         onClose={() => setBotPopup({ isOpen: false, message: '' })}
       />
 
+      {/* RegFlash Modal Pop-up (Panduan Durasi 10 Menit & Status Tiket) */}
+      <RegFlash
+        isOpen={regPopup.isOpen}
+        onClose={() => setRegPopup(prev => ({ ...prev, isOpen: false }))}
+        type={regPopup.type}
+        title={regPopup.title}
+        message={regPopup.message}
+        subMessage={regPopup.subMessage}
+        isClosable={regPopup.type === 'info'}
+      />
+
       {/* Visitor Badge Modal */}
       {showBadgeModal && (
         <VisitorBadgeModal
           guest={registeredGuest}
-          onClose={() => setShowBadgeModal(false)}
+          onClose={() => {
+            setShowBadgeModal(false);
+            if (isGuestContext || qrStatus.submitted) {
+              setRegPopup({
+                isOpen: true,
+                type: 'success',
+                title: 'Pendaftaran Berhasil Disimpan',
+                message: 'Tiket barcode telah digunakan pada perangkat ini. Registrasi Anda telah tercatat!',
+                subMessage: 'Perangkat ini sudah menyelesaikan pendaftaran. Terima kasih atas kerja sama Anda.'
+              });
+            }
+          }}
         />
       )}
     </div>

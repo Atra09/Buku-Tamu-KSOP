@@ -1,25 +1,13 @@
 const { MasterTujuan, MasterKategoriAsal, ActivityLog } = require('../models');
-
-// Helper to extract actor info from request
-const getActorInfo = (req) => {
-  let user_nama = 'Administrator';
-  let user_id = null;
-  if (req.user) {
-    user_nama = req.user.nama || req.user.username || 'Admin';
-    user_id = req.user.id || null;
-  } else if (req.headers['x-user-nama']) {
-    user_nama = decodeURIComponent(req.headers['x-user-nama']);
-  }
-  return { user_nama, user_id };
-};
+const { resolveActor } = require('../utils/actorHelper');
 
 // Helper to safely record activity log
 const logActivity = async (req, action, details) => {
   try {
-    const { user_nama, user_id } = getActorInfo(req);
+    const { actorNama, userId } = await resolveActor(req, 'Administrator');
     await ActivityLog.create({
-      user_nama,
-      user_id,
+      user_nama: actorNama,
+      user_id: userId,
       action,
       details
     });

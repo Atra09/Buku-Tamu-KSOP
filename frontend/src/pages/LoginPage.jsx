@@ -1,53 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { setSessionData } from '../utils/session';
+import { Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const LoginPage = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [formData, setFormData] = useState({ username: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const navigate = useNavigate();
+  const { login } = useAuth();
+  const { showToast } = useToast();
 
   useEffect(() => {
     const expiredMsg = sessionStorage.getItem('sitamu_session_expired');
     if (expiredMsg) {
-      setError(expiredMsg);
+      showToast(expiredMsg, 'error');
       sessionStorage.removeItem('sitamu_session_expired');
     }
-  }, []);
+  }, [showToast]);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
 
-    if (!username || !password) {
-      setError('Username dan password wajib diisi');
+    const cleanUsername = formData.username.trim();
+    const cleanPassword = formData.password.trim();
+
+    if (!cleanUsername || !cleanPassword) {
+      showToast('Username dan password wajib diisi!', 'error');
       return;
     }
 
     try {
       setLoading(true);
-      const res = await axios.post('/api/auth/login', { username, password });
+      const res = await axios.post('/api/auth/login', {
+        username: cleanUsername,
+        password: cleanPassword
+      });
 
       if (res.data && res.data.success) {
-        // Save user & token to sessionStorage
-        setSessionData(res.data.user, res.data.token);
-        sessionStorage.setItem('sitamu_login_flash', `Selamat datang, ${res.data.user?.nama || res.data.user?.username || 'User'}!`);
-        
-        // Navigate to Guest Registration Form (/buku-tamu)
+        login(res.data.user, res.data.token);
+        sessionStorage.setItem(
+          'sitamu_login_flash',
+          `Selamat datang, ${res.data.user?.nama || res.data.user?.username || 'User'}!`
+        );
         navigate('/buku-tamu');
       } else {
-        setError(res.data.message || 'Login gagal, periksa kembali data Anda');
+        showToast(res.data.message || 'Login gagal, periksa kembali data Anda', 'error');
       }
     } catch (err) {
-      setError(
-        err.response?.data?.message || 'Gagal terhubung ke server login. Silakan coba lagi.'
-      );
+      const errorMsg = err.response?.data?.message || 'Gagal terhubung ke server login. Silakan coba lagi.';
+      showToast(errorMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -55,15 +64,15 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative font-sans overflow-hidden bg-slate-900">
-      
+
       {/* Blurred Background Image */}
       <div 
         className="absolute inset-0 bg-cover bg-center filter blur-md scale-105 opacity-80"
         style={{ backgroundImage: `url('/images/ksop_service_bg.png')` }}
-      ></div>
+      />
 
       {/* Dark/Soft Blue Overlay for Contrast */}
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 via-slate-900/40 to-slate-900/60 backdrop-blur-xs"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 via-slate-900/40 to-slate-900/60 backdrop-blur-xs" />
 
       <div className="max-w-md w-full relative z-10">
         
@@ -76,16 +85,12 @@ const LoginPage = () => {
               src="/images/kementrianperhubungan.png"
               alt="Logo Kementerian Perhubungan"
               className="w-16 h-16 object-contain mx-auto mb-3 filter drop-shadow-xs"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Logo_Kementerian_Perhubungan.png/600px-Logo_Kementerian_Perhubungan.png";
-              }}
             />
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               KSOP Si-Tamu
             </h1>
             <p className="text-xs text-slate-500 font-bold mt-1">
-              Sistem Informasi Registrasi & Manajemen Tamu
+              Sistem Informasi Registrasi &amp; Manajemen Tamu
             </p>
           </div>
 
@@ -96,14 +101,6 @@ const LoginPage = () => {
               Masukkan username dan password Anda untuk masuk!
             </p>
           </div>
-
-          {/* Error Alert */}
-          {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-3 animate-shake">
-              <AlertCircle className="w-5 h-5 shrink-0 text-rose-500" />
-              <span>{error}</span>
-            </div>
-          )}
 
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-5">
@@ -116,8 +113,8 @@ const LoginPage = () => {
               <input
                 type="text"
                 placeholder="Masukkan username Anda"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={formData.username}
+                onChange={(e) => handleInputChange('username', e.target.value)}
                 required
                 className="w-full px-4 py-3 text-xs font-bold rounded-2xl border border-slate-200 bg-slate-50 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all outline-hidden placeholder:text-slate-400 placeholder:font-medium"
               />
@@ -132,15 +129,16 @@ const LoginPage = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Masukkan password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
                   required
                   className="w-full pl-4 pr-11 py-3 text-xs font-bold rounded-2xl border border-slate-200 bg-slate-50 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all outline-hidden placeholder:text-slate-400 placeholder:font-medium"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword(prev => !prev)}
                   className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>

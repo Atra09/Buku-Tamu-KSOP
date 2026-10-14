@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Building, Layers, Users, History, ExternalLink, LogOut,
-  ChevronLeft, ChevronRight, Menu, X, MessageSquare
+  ChevronLeft, ChevronRight, Menu, X, MessageSquare, CalendarDays
 } from 'lucide-react';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Daftar Kunjungan', key: 'tamu', to: '/admin/tamu', icon: ClipboardList },
   { label: 'Tujuan Kunjungan', key: 'tujuan', to: '/admin/tujuan', icon: Building },
   { label: 'Kategori Asal', key: 'kategori-asal', to: '/admin/kategori-asal', icon: Layers },
+  { label: 'Jadwal Petugas', key: 'jadwal', to: '/admin/jadwal', icon: CalendarDays },
   { label: 'Kelola Akun User', key: 'users', to: '/admin/users', icon: Users },
   { label: 'WA Bot Notifikasi', key: 'notif-bot', to: '/admin/notif-bot', icon: MessageSquare },
   { label: 'Log Aktivitas', key: 'log-aktivitas', to: '/admin/log-aktivitas', icon: History },
@@ -31,7 +32,7 @@ const Sidebar = ({
       return item.key === 'dashboard' || item.key === 'tamu';
     }
     if (r === 'kordinator' || r === 'koordinator') {
-      return item.key === 'dashboard' || item.key === 'tamu' || item.key === 'tujuan' || item.key === 'kategori-asal' || item.key === 'log-aktivitas';
+      return item.key === 'dashboard' || item.key === 'tamu' || item.key === 'tujuan' || item.key === 'kategori-asal' || item.key === 'jadwal' || item.key === 'log-aktivitas';
     }
     return true; // Admin gets access to all items (including 'users')
   });

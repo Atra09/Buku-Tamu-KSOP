@@ -27,28 +27,10 @@ exports.getActivityLogs = async (req, res) => {
       offset: parseInt(offset)
     });
 
-    // Fallback: Link user_nama or user_id to User model if unlinked
-    const users = await User.findAll({
-      attributes: ['id', 'username', 'nama', 'role']
-    });
-
-    const userMap = {};
-    const userById = {};
-    users.forEach(u => {
-      userById[u.id] = u;
-      if (u.nama) userMap[u.nama.toLowerCase().trim()] = u;
-      if (u.username) userMap[u.username.toLowerCase().trim()] = u;
-    });
-
+    // Format and enrich each row directly from the joined User relation (No N+1 User.findAll query)
     const enrichedRows = rows.map(r => {
       const logObj = r.toJSON();
-      const nameKey = (logObj.user_nama || '').toLowerCase().trim();
-      
-      const userFromId = logObj.user_id ? userById[logObj.user_id] : null;
-      const userFromName = userMap[nameKey];
-      const matchedUser = userFromId || userFromName || logObj.User;
-
-      let rawRole = (matchedUser?.role || logObj.User?.role || '').toLowerCase().trim();
+      let rawRole = (logObj.User?.role || '').toLowerCase().trim();
 
       if (rawRole.includes('kordinat') || rawRole.includes('koordinat')) {
         rawRole = 'kordinator';
@@ -57,19 +39,18 @@ exports.getActivityLogs = async (req, res) => {
       } else if (rawRole) {
         rawRole = 'user';
       } else {
-        rawRole = null;
+        // Fallback jika user_id null (aktivitas guest / sistem pos jaga)
+        const nameLower = (logObj.user_nama || '').toLowerCase();
+        if (nameLower.includes('admin')) {
+          rawRole = 'admin';
+        } else if (nameLower.includes('kordinator') || nameLower.includes('koordinator')) {
+          rawRole = 'kordinator';
+        } else {
+          rawRole = null;
+        }
       }
 
       logObj.user_role = rawRole;
-
-      if (!logObj.User && matchedUser) {
-        logObj.User = {
-          id: matchedUser.id,
-          username: matchedUser.username,
-          nama: matchedUser.nama,
-          role: matchedUser.role
-        };
-      }
       return logObj;
     });
 
@@ -89,20 +70,41 @@ exports.createLog = async (req, res) => {
     const { action, details } = req.body;
     if (!action) return res.status(400).json({ success: false, message: 'Aksi wajib diisi' });
 
-    let actorNama = 'Administrator';
+    let actorNama;
     let user_id = null;
-    if (req.user) {
-      actorNama = req.user.nama || req.user.username || 'Admin';
-      user_id = req.user.id || null;
-    } else if (req.headers['x-user-nama']) {
-      actorNama = decodeURIComponent(req.headers['x-user-nama']);
+
+    if (req.user && req.user.id) {
+      // User internal terautentikasi via token JWT
+      actorNama = req.user.nama || req.user.username || 'User';
+      user_id = req.user.id;
+    } else {
+      // Permintaan publik tanpa autentikasi (misal: tamu mencetak badge di browser)
+      // Terapkan whitelist aksi yang sah untuk mencegah polusi log / log injection
+      const allowedPublicActions = [
+        'CETAK_BADGE_TAMU',
+        'PRINT_BADGE',
+        'DOWNLOAD_LAPORAN_TAMU',
+        'EKSPOR_EXCEL',
+        'EXPORT_EXCEL',
+        'REGISTRASI_TAMU'
+      ];
+
+      const cleanAction = String(action).trim().toUpperCase();
+      if (!allowedPublicActions.includes(cleanAction)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Aksi tidak diizinkan tanpa autentikasi petugas.'
+        });
+      }
+
+      actorNama = 'Tamu Mandiri (Guest)';
     }
 
     const newLog = await ActivityLog.create({
       user_nama: actorNama,
       user_id,
-      action,
-      details: details || '-'
+      action: String(action).slice(0, 100),
+      details: typeof details === 'string' ? details.slice(0, 255) : '-'
     });
 
     res.status(201).json({ success: true, data: newLog });

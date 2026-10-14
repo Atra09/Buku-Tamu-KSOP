@@ -1,6 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Camera, RefreshCw, CheckCircle2, AlertCircle, Upload, Video, MapPin } from 'lucide-react';
+import React, { useRef, useState, useEffect, memo } from 'react';
+import { Camera, RefreshCw, CheckCircle2, AlertCircle, Video, MapPin } from 'lucide-react';
 
+// Registry global stream webcam untuk memastikan tidak ada hardware camera leak di background
 if (typeof window !== 'undefined' && !window.__ACTIVE_WEBCAM_STREAMS__) {
   window.__ACTIVE_WEBCAM_STREAMS__ = new Set();
 }
@@ -10,8 +11,7 @@ export const stopAllGlobalWebcamStreams = () => {
     window.__ACTIVE_WEBCAM_STREAMS__.forEach(stream => {
       try {
         if (stream && typeof stream.getTracks === 'function') {
-          const tracks = stream.getTracks();
-          tracks.forEach(track => {
+          stream.getTracks().forEach(track => {
             try {
               track.enabled = false;
               track.stop();
@@ -27,11 +27,163 @@ export const stopAllGlobalWebcamStreams = () => {
   }
 };
 
+
+/**
+ * Helper murni di luar komponen: Reverse geocode koordinat GPS menjadi teks hierarki resmi
+ */
+const fetchLocationFromCoords = async (latitude, longitude) => {
+  try {
+    // 1. Fetch BigDataCloud API
+    let bdcData = null;
+    try {
+      const bdcRes = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=id`
+      );
+      if (bdcRes.ok) bdcData = await bdcRes.json();
+    } catch (e) { }
+
+    // 2. Fetch OpenStreetMap Nominatim API (Zoom 18 & Zoom 14 secara paralel)
+    let nomData = null;
+    let nomDataVillage = null;
+    try {
+      const [nomRes, nomResVillage] = await Promise.all([
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18`,
+          { headers: { 'Accept-Language': 'id', 'User-Agent': 'SiTamuApp/1.0' } }
+        ),
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
+          { headers: { 'Accept-Language': 'id', 'User-Agent': 'SiTamuApp/1.0' } }
+        )
+      ]);
+      if (nomRes.ok) nomData = await nomRes.json();
+      if (nomResVillage && nomResVillage.ok) nomDataVillage = await nomResVillage.json();
+    } catch (e) { }
+
+    const nomAddress = (nomData && nomData.address) || {};
+    const nomAddressVillage = (nomDataVillage && nomDataVillage.address) || {};
+
+    let gedung = nomAddress.building ||
+      nomAddress.office ||
+      nomAddress.amenity ||
+      nomAddress.government ||
+      nomAddress.public_building ||
+      nomAddress.commercial ||
+      nomAddress.industrial ||
+      nomAddress.shop ||
+      nomAddress.tourism ||
+      nomAddress.historic || '';
+    if (/^\d+[-\d\s]*$/.test(gedung) || gedung.length < 3) gedung = '';
+
+    let jalan = (nomAddress.road || nomAddress.pedestrian || nomAddress.street || '').trim();
+    if (/^\d+[-\d\s]*$/.test(jalan) || jalan.length <= 3) {
+      jalan = '';
+    } else if (!jalan.toLowerCase().startsWith('jl') && !jalan.toLowerCase().startsWith('jalan') && !jalan.toLowerCase().startsWith('gang') && !jalan.toLowerCase().startsWith('gg')) {
+      jalan = `Jl. ${jalan}`;
+    }
+
+    let desa = nomAddress.village ||
+      nomAddress.suburb ||
+      nomAddress.neighbourhood ||
+      nomAddress.hamlet ||
+      nomAddress.quarter ||
+      nomAddress.residential ||
+      nomAddressVillage.village ||
+      nomAddressVillage.suburb ||
+      nomAddressVillage.neighbourhood ||
+      nomAddressVillage.hamlet ||
+      nomAddressVillage.town || '';
+
+    if (!desa && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
+      const admin = bdcData.localityInfo.administrative;
+      const lvl8 = admin.find(a => a.adminLevel === 8);
+      if (lvl8) desa = lvl8.name;
+    }
+
+    let kecamatan = nomAddress.subdistrict || nomAddress.district || nomAddress.city_district || nomAddressVillage.subdistrict || nomAddressVillage.district || '';
+    if (!kecamatan && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
+      const admin = bdcData.localityInfo.administrative;
+      const lvl7 = admin.find(a => a.adminLevel === 7);
+      if (lvl7) kecamatan = lvl7.name;
+      else if (bdcData.locality) kecamatan = bdcData.locality;
+    }
+
+    let kabupaten = nomAddress.regency || nomAddress.county || nomAddress.city || nomAddress.town || nomAddress.municipality || '';
+    if (!kabupaten && bdcData) {
+      if (bdcData.localityInfo && bdcData.localityInfo.administrative) {
+        const admin = bdcData.localityInfo.administrative;
+        const lvl5or6 = admin.find(a => a.adminLevel === 5 || a.adminLevel === 6);
+        if (lvl5or6) kabupaten = lvl5or6.name;
+      }
+      if (!kabupaten && bdcData.city) kabupaten = bdcData.city;
+    }
+
+    // Fallback parsing from display_name
+    const displayParts = (nomData && nomData.display_name ? nomData.display_name : '').split(',').map(s => s.trim());
+    const cleanDisplayParts = displayParts.filter(p => {
+      if (!p) return false;
+      const l = p.toLowerCase();
+      if (l === 'indonesia' || l === 'jawa timur' || l === 'east java' || /^\d{5}$/.test(p) || /^\d+[-\d\s]*$/.test(p)) return false;
+      return true;
+    });
+
+    if (!desa && cleanDisplayParts.length > 0) {
+      const candidate = cleanDisplayParts.find(p => {
+        const l = p.toLowerCase();
+        if (l.startsWith('jl') || l.startsWith('jalan') || l.startsWith('gang') || l.startsWith('gg')) return false;
+        if (jalan && (l.includes(jalan.toLowerCase()) || jalan.toLowerCase().includes(l))) return false;
+        if (gedung && (l.includes(gedung.toLowerCase()) || gedung.toLowerCase().includes(l))) return false;
+        if (kecamatan && (l.includes(kecamatan.toLowerCase()) || kecamatan.toLowerCase().includes(l))) return false;
+        if (kabupaten && (l.includes(kabupaten.toLowerCase()) || kabupaten.toLowerCase().includes(l))) return false;
+        return true;
+      });
+      if (candidate) desa = candidate;
+    }
+
+    const parts = [];
+    if (gedung) parts.push(gedung);
+    if (jalan && (!gedung || !gedung.toLowerCase().includes(jalan.toLowerCase()))) parts.push(jalan);
+    if (desa) {
+      const lowerDesa = desa.toLowerCase();
+      const isStreetName = lowerDesa.startsWith('jl') || lowerDesa.startsWith('jalan') || lowerDesa.startsWith('gang') || lowerDesa.startsWith('gg');
+      if (!isStreetName && (!jalan || !lowerDesa.includes(jalan.toLowerCase()))) {
+        const desaClean = desa.replace(/^(desa|kelurahan|kel\.)\s+/i, '');
+        parts.push(lowerDesa.startsWith('kel') ? `Kel. ${desaClean}` : `Desa ${desaClean}`);
+      }
+    }
+    if (kecamatan) {
+      const kecClean = kecamatan.replace(/^(kecamatan|kec\.)\s+/i, '');
+      if (!desa || !desa.toLowerCase().includes(kecClean.toLowerCase())) {
+        parts.push(`Kec. ${kecClean}`);
+      }
+    }
+    if (kabupaten) {
+      const kabClean = kabupaten.replace(/^(kabupaten|kab\.|kota)\s+/i, '');
+      if (!kecamatan || !kecamatan.toLowerCase().includes(kabClean.toLowerCase())) {
+        const kabFormatted = kabupaten.toLowerCase().startsWith('kota') ? `Kota ${kabClean}` : `Kab. ${kabClean}`;
+        parts.push(kabFormatted);
+      }
+    }
+
+    const addressText = parts.length > 0 ? parts.join(', ') : '';
+    if (addressText) {
+      return `${latitude.toFixed(6)}, ${longitude.toFixed(6)} (${addressText})`;
+    }
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  } catch (e) {
+    return 'Lokasi Tidak Terdeteksi';
+  }
+};
+
+/**
+ * Komponen WebcamCapture (Ultra Lightweight & Responsive)
+ * Dilengkapi GPU hardware compositing, memoized pure render, dan zero re-render overhead.
+ */
 const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const fileInputRef = useRef(null);
   const streamRef = useRef(null);
+  const isStartingRef = useRef(false);
   const isMountedRef = useRef(true);
   const shouldCameraBeOnRef = useRef(false);
   const onLocationChangeRef = useRef(onLocationChange);
@@ -52,7 +204,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
 
   useEffect(() => {
     setCapturedImage(currentPhoto || null);
-    if (!currentPhoto && isMountedRef.current) {
+    if (!currentPhoto && isMountedRef.current && !streamRef.current?.active) {
       startCamera();
     }
   }, [currentPhoto]);
@@ -61,14 +213,14 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
     isMountedRef.current = true;
     detectUserLocation();
 
-    if (!capturedImage) {
+    if (!capturedImage && !streamRef.current?.active) {
       startCamera();
     }
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
         stopCamera();
-      } else if (!capturedImage && isMountedRef.current) {
+      } else if (!capturedImage && isMountedRef.current && !streamRef.current?.active) {
         startCamera();
       }
     };
@@ -89,222 +241,52 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
     };
   }, []);
 
-  const fallbackIpLocation = async () => {
-    try {
-      const res = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=id');
-      if (res.ok) {
-        const data = await res.json();
-        let desa = '';
-        let kecamatan = data.locality || '';
-        let kabupaten = data.city || data.principalSubdivision || '';
-
-        if (data.localityInfo && data.localityInfo.administrative) {
-          const admin = data.localityInfo.administrative;
-          const lvl7 = admin.find(a => a.adminLevel === 7 || a.adminLevel === 8);
-          if (lvl7) desa = lvl7.name;
-          const lvl6 = admin.find(a => a.adminLevel === 6);
-          if (lvl6) kecamatan = lvl6.name;
-          const lvl5 = admin.find(a => a.adminLevel === 5);
-          if (lvl5) kabupaten = lvl5.name;
-        }
-
-        const parts = [];
-        if (desa) parts.push(desa.toLowerCase().startsWith('desa') || desa.toLowerCase().startsWith('kel') ? desa : `Desa ${desa}`);
-        if (kecamatan) parts.push(`Kec. ${kecamatan.replace(/^Kecamatan\s+/i, '')}`);
-        if (kabupaten) parts.push(`Kab. ${kabupaten.replace(/^Kabupaten\s+/i, '')}`);
-
-        const fullLoc = parts.length > 0 ? parts.join(', ') : 'Lokasi Tidak Terdeteksi';
-        if (isMountedRef.current) {
-          setLocationText(fullLoc);
-          if (onLocationChangeRef.current) onLocationChangeRef.current(fullLoc);
-        }
-        return;
-      }
-    } catch (e) {
-      console.error('IP Geolocation fallback error:', e);
-    }
-
-    if (isMountedRef.current) {
-      setLocationText('Lokasi Tidak Terdeteksi');
-      if (onLocationChangeRef.current) onLocationChangeRef.current('Lokasi Tidak Terdeteksi');
-    }
-  };
-
   const detectUserLocation = () => {
+    if (isMountedRef.current) {
+      setLocationText('Mendeteksi Lokasi...');
+    }
+
+    // Dengarkan perubahan status izin lokasi secara reaktif jika browser sedang menampilkan prompt
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then(permissionStatus => {
+        permissionStatus.onchange = () => {
+          if (permissionStatus.state === 'granted') {
+            detectUserLocation();
+          }
+        };
+      }).catch(() => {});
+    }
+
     if (!navigator.geolocation) {
-      fallbackIpLocation();
+      if (isMountedRef.current) {
+        setLocationText('Perangkat tidak mendukung GPS Geolocation');
+      }
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        try {
-          // 1. Fetch BigDataCloud API
-          let bdcData = null;
-          try {
-            const bdcRes = await fetch(
-              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=id`
-            );
-            if (bdcRes.ok) {
-              bdcData = await bdcRes.json();
-            }
-          } catch (e) { }
-
-          // 2. Fetch OpenStreetMap Nominatim API (Zoom 18 for street/building + Zoom 14 for village/subdistrict)
-          let nomData = null;
-          let nomDataVillage = null;
-          try {
-            const [nomRes, nomResVillage] = await Promise.all([
-              fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18`,
-                { headers: { 'Accept-Language': 'id', 'User-Agent': 'SiTamuApp/1.0' } }
-              ),
-              fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
-                { headers: { 'Accept-Language': 'id', 'User-Agent': 'SiTamuApp/1.0' } }
-              )
-            ]);
-            if (nomRes.ok) nomData = await nomRes.json();
-            if (nomResVillage && nomResVillage.ok) nomDataVillage = await nomResVillage.json();
-          } catch (e) { }
-
-          const nomAddress = (nomData && nomData.address) || {};
-          const nomAddressVillage = (nomDataVillage && nomDataVillage.address) || {};
-
-          let gedung = nomAddress.building ||
-            nomAddress.office ||
-            nomAddress.amenity ||
-            nomAddress.government ||
-            nomAddress.public_building ||
-            nomAddress.commercial ||
-            nomAddress.industrial ||
-            nomAddress.shop ||
-            nomAddress.tourism ||
-            nomAddress.historic || '';
-          if (/^\d+[-\d\s]*$/.test(gedung) || gedung.length < 3) gedung = '';
-
-          let jalan = (nomAddress.road || nomAddress.pedestrian || nomAddress.street || '').trim();
-          if (/^\d+[-\d\s]*$/.test(jalan) || jalan.length <= 3) {
-            jalan = '';
-          } else if (!jalan.toLowerCase().startsWith('jl') && !jalan.toLowerCase().startsWith('jalan') && !jalan.toLowerCase().startsWith('gang') && !jalan.toLowerCase().startsWith('gg')) {
-            jalan = `Jl. ${jalan}`;
-          }
-
-          let desa = nomAddress.village ||
-            nomAddress.suburb ||
-            nomAddress.neighbourhood ||
-            nomAddress.hamlet ||
-            nomAddress.quarter ||
-            nomAddress.residential ||
-            nomAddressVillage.village ||
-            nomAddressVillage.suburb ||
-            nomAddressVillage.neighbourhood ||
-            nomAddressVillage.hamlet ||
-            nomAddressVillage.town || '';
-
-          if (!desa && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
-            const admin = bdcData.localityInfo.administrative;
-            const lvl8 = admin.find(a => a.adminLevel === 8);
-            if (lvl8) desa = lvl8.name;
-          }
-
-          let kecamatan = nomAddress.subdistrict || nomAddress.district || nomAddress.city_district || nomAddressVillage.subdistrict || nomAddressVillage.district || '';
-          if (!kecamatan && bdcData && bdcData.localityInfo && bdcData.localityInfo.administrative) {
-            const admin = bdcData.localityInfo.administrative;
-            const lvl7 = admin.find(a => a.adminLevel === 7);
-            if (lvl7) kecamatan = lvl7.name;
-            else if (bdcData.locality) kecamatan = bdcData.locality;
-          }
-
-          let kabupaten = nomAddress.regency || nomAddress.county || nomAddress.city || nomAddress.town || nomAddress.municipality || '';
-          if (!kabupaten && bdcData) {
-            if (bdcData.localityInfo && bdcData.localityInfo.administrative) {
-              const admin = bdcData.localityInfo.administrative;
-              const lvl5or6 = admin.find(a => a.adminLevel === 5 || a.adminLevel === 6);
-              if (lvl5or6) kabupaten = lvl5or6.name;
-            }
-            if (!kabupaten && bdcData.city) kabupaten = bdcData.city;
-          }
-
-          // Fallback parsing from display_name (filtering out street names, buildings, districts)
-          const displayParts = (nomData && nomData.display_name ? nomData.display_name : '').split(',').map(s => s.trim());
-          const cleanDisplayParts = displayParts.filter(p => {
-            if (!p) return false;
-            const l = p.toLowerCase();
-            if (l === 'indonesia' || l === 'jawa timur' || l === 'east java' || /^\d{5}$/.test(p) || /^\d+[-\d\s]*$/.test(p)) return false;
-            return true;
-          });
-
-          if (!desa && cleanDisplayParts.length > 0) {
-            const candidate = cleanDisplayParts.find(p => {
-              const l = p.toLowerCase();
-              if (l.startsWith('jl') || l.startsWith('jalan') || l.startsWith('gang') || l.startsWith('gg')) return false;
-              if (jalan && (l.includes(jalan.toLowerCase()) || jalan.toLowerCase().includes(l))) return false;
-              if (gedung && (l.includes(gedung.toLowerCase()) || gedung.toLowerCase().includes(l))) return false;
-              if (kecamatan && (l.includes(kecamatan.toLowerCase()) || kecamatan.toLowerCase().includes(l))) return false;
-              if (kabupaten && (l.includes(kabupaten.toLowerCase()) || kabupaten.toLowerCase().includes(l))) return false;
-              return true;
-            });
-            if (candidate) desa = candidate;
-          }
-
-          // Build ordered address hierarchy: [Gedung], [Jalan], [Desa], [Kecamatan], [Kabupaten]
-          const parts = [];
-
-          // 1. Gedung / Tempat
-          if (gedung) {
-            parts.push(gedung);
-          }
-
-          // 2. Jalan
-          if (jalan && (!gedung || !gedung.toLowerCase().includes(jalan.toLowerCase()))) {
-            parts.push(jalan);
-          }
-
-          // 3. Desa / Kelurahan
-          if (desa) {
-            const lowerDesa = desa.toLowerCase();
-            const isStreetName = lowerDesa.startsWith('jl') || lowerDesa.startsWith('jalan') || lowerDesa.startsWith('gang') || lowerDesa.startsWith('gg');
-            if (!isStreetName && (!jalan || !lowerDesa.includes(jalan.toLowerCase()))) {
-              const desaClean = desa.replace(/^(desa|kelurahan|kel\.)\s+/i, '');
-              parts.push(lowerDesa.startsWith('kel') ? `Kel. ${desaClean}` : `Desa ${desaClean}`);
-            }
-          }
-
-          // 4. Kecamatan
-          if (kecamatan) {
-            const kecClean = kecamatan.replace(/^(kecamatan|kec\.)\s+/i, '');
-            if (!desa || !desa.toLowerCase().includes(kecClean.toLowerCase())) {
-              parts.push(`Kec. ${kecClean}`);
-            }
-          }
-
-          // 5. Kabupaten / Kota
-          if (kabupaten) {
-            const kabClean = kabupaten.replace(/^(kabupaten|kab\.|kota)\s+/i, '');
-            if (!kecamatan || !kecamatan.toLowerCase().includes(kabClean.toLowerCase())) {
-              const kabFormatted = kabupaten.toLowerCase().startsWith('kota') ? `Kota ${kabClean}` : `Kab. ${kabClean}`;
-              parts.push(kabFormatted);
-            }
-          }
-
-          const coordStr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          const fullLoc = parts.length > 0 ? `${coordStr} (${parts.join(', ')})` : coordStr;
-
-          if (isMountedRef.current) {
-            setLocationText(fullLoc);
-            if (onLocationChangeRef.current) onLocationChangeRef.current(fullLoc);
-          }
-        } catch (e) {
-          fallbackIpLocation();
+        const fullLoc = await fetchLocationFromCoords(latitude, longitude);
+        if (isMountedRef.current) {
+          setLocationText(fullLoc);
+          if (onLocationChangeRef.current) onLocationChangeRef.current(fullLoc);
         }
       },
-      (err) => {
-        console.warn('Geolocation error, falling back to IP Geolocation:', err);
-        fallbackIpLocation();
+      async (err) => {
+        console.warn('Geolocation detection status:', err);
+        if (isMountedRef.current) {
+          let errorText = 'Gagal mendeteksi lokasi GPS (Klik untuk coba lagi)';
+          if (err.code === 1) {
+            errorText = 'Akses Lokasi Ditolak (Aktifkan Izin GPS Browser)';
+          } else if (err.code === 3) {
+            errorText = 'Waktu Deteksi GPS Habis (Klik untuk coba lagi)';
+          }
+          setLocationText(errorText);
+          if (onLocationChangeRef.current) onLocationChangeRef.current(errorText);
+        }
       },
-      { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true }
+      { timeout: 15000, maximumAge: 10000, enableHighAccuracy: true }
     );
   };
 
@@ -351,46 +333,42 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
   };
 
   const startCamera = async () => {
+    if (isStartingRef.current) return;
+    if (streamRef.current && streamRef.current.active && isStreaming) return;
+
+    isStartingRef.current = true;
     setError(null);
     shouldCameraBeOnRef.current = true;
 
     stopAllGlobalWebcamStreams();
 
     try {
-      // Polyfill for mediaDevices and getUserMedia in HTTP / non-secure contexts
-      if (typeof navigator !== 'undefined') {
-        if (!navigator.mediaDevices) {
-          navigator.mediaDevices = {};
-        }
-
-        if (!navigator.mediaDevices.getUserMedia) {
-          const getUserMediaLegacy =
-            navigator.getUserMedia ||
-            navigator.webkitGetUserMedia ||
-            navigator.mozGetUserMedia ||
-            navigator.msGetUserMedia;
-
-          if (getUserMediaLegacy) {
-            navigator.mediaDevices.getUserMedia = function (constraints) {
-              return new Promise((resolve, reject) => {
-                getUserMediaLegacy.call(navigator, constraints, resolve, reject);
-              });
-            };
-          }
-        }
-      }
-
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Browser memblokir izin kamera otomatis pada HTTP IP. Klik tombol di bawah untuk meminta izin.');
       }
 
+      const idealConstraints = {
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 30, max: 30 }
+        },
+        audio: false
+      };
+
       let stream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
-        });
+        stream = await navigator.mediaDevices.getUserMedia(idealConstraints);
       } catch (e) {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', frameRate: { ideal: 30 } },
+            audio: false
+          });
+        } catch (e2) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
       }
 
       if (stream && window.__ACTIVE_WEBCAM_STREAMS__) {
@@ -417,6 +395,8 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
         setError('Kamera belum diizinkan. Klik tombol "Minta Izin Kamera" di bawah.');
         setIsStreaming(false);
       }
+    } finally {
+      isStartingRef.current = false;
     }
   };
 
@@ -427,7 +407,7 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
 
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       ctx.save();
       ctx.translate(canvas.width, 0);
@@ -457,32 +437,6 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
     }, 50);
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          if (canvasRef.current) {
-            const canvas = canvasRef.current;
-            canvas.width = img.width || 640;
-            canvas.height = img.height || 480;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            const cleanDataUrl = canvas.toDataURL('image/jpeg', 0.88);
-            setCapturedImage(cleanDataUrl);
-            if (onCapture) onCapture(cleanDataUrl, locationTextRef.current);
-            stopCamera();
-          }
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   return (
     <div className="w-full flex-1 flex flex-col items-center justify-between min-h-[380px]">
       <div className="relative w-full flex-1 min-h-[310px] bg-slate-900 rounded-xl overflow-hidden shadow-md border-2 border-sky-200 flex items-center justify-center">
@@ -498,8 +452,14 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
               ref={videoRef}
               autoPlay
               playsInline
+              webkit-playsinline="true"
               muted
-              className={`w-full h-full object-cover transform -scale-x-100 ${isStreaming ? 'block' : 'hidden'}`}
+              disablePictureInPicture
+              className={`w-full h-full object-cover will-change-transform ${isStreaming ? 'block' : 'hidden'}`}
+              style={{
+                transform: 'scaleX(-1) translateZ(0)',
+                WebkitTransform: 'scaleX(-1) translateZ(0)'
+              }}
             />
             {!isStreaming && (
               <div className="flex flex-col items-center justify-center p-4 text-center text-slate-300 space-y-2">
@@ -530,9 +490,13 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
           </div>
         )}
 
-        {/* Location Overlay Indicator */}
+        {/* Location Overlay Indicator (Bisa diklik untuk deteksi ulang GPS) */}
         {isStreaming && !capturedImage && (
-          <div className="absolute bottom-2.5 left-2.5 bg-slate-950/85 backdrop-blur-xs text-sky-300 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-sky-500/40 shadow-md max-w-[92%] truncate">
+          <div
+            onClick={detectUserLocation}
+            title="Klik untuk mendeteksi ulang lokasi GPS"
+            className="absolute bottom-2.5 left-2.5 bg-slate-950/90 text-sky-300 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-sky-500/40 shadow-md max-w-[92%] truncate cursor-pointer hover:bg-slate-900 hover:border-sky-400 active:scale-95 transition-all select-none"
+          >
             <MapPin className="w-3.5 h-3.5 text-sky-400 shrink-0" />
             <span className="truncate">{locationText}</span>
           </div>
@@ -576,4 +540,4 @@ const WebcamCapture = ({ onCapture, currentPhoto, onLocationChange }) => {
   );
 };
 
-export default WebcamCapture;
+export default memo(WebcamCapture);

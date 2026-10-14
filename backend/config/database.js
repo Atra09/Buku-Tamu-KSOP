@@ -18,7 +18,7 @@ const initDatabase = () => {
     sequelize = new Sequelize({
       dialect: 'sqlite',
       storage: storagePath,
-      logging: false
+      logging: (msg) => console.log(`[SQL 🔍] ${msg}`)
     });
   } else {
     // MySQL Dialect
@@ -27,7 +27,7 @@ const initDatabase = () => {
       port: dbPort,
       dialect: 'mysql',
       timezone: '+07:00',
-      logging: false
+      logging: (msg) => console.log(`[SQL 🔍] ${msg}`)
     });
   }
   return sequelize;

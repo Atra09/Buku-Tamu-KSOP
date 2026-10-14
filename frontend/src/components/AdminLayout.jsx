@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Flash from './flash/flash';
 import UserProfileModal from './UserProfileModal';
 import Sidebar from './dashboard/sidebar';
 import IconProfil from './iconprofil';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const AdminLayout = ({ children, title, subtitle, activeTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, role: userRole, logout, updateUser } = useAuth();
+  const { showToast } = useToast();
 
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('sitamu_sidebar_collapsed') === 'true');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('sitamu_sidebar_collapsed', isCollapsed);
@@ -22,37 +24,27 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
     setIsMobileOpen(false);
   }, [location.pathname]);
 
-  let user = {};
-  try {
-    const rawUser = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-    if (rawUser && rawUser !== 'undefined') {
-      user = JSON.parse(rawUser);
-    }
-  } catch (e) {
-    user = {};
-  }
-  const userRole = (user.role || 'user').toLowerCase();
-
   useEffect(() => {
     const loginFlash = sessionStorage.getItem('sitamu_login_flash');
     if (loginFlash) {
-      setToast({ message: loginFlash, type: 'success' });
+      showToast(loginFlash, 'success');
       sessionStorage.removeItem('sitamu_login_flash');
     }
-  }, []);
+  }, [showToast]);
 
   const currentTab = activeTab || (
     location.pathname === '/admin/tamu' ? 'tamu' :
       location.pathname === '/admin/tujuan' ? 'tujuan' :
         location.pathname === '/admin/kategori-asal' ? 'kategori-asal' :
-          location.pathname === '/admin/users' ? 'users' :
+          location.pathname === '/admin/jadwal' ? 'jadwal' :
+            location.pathname === '/admin/users' ? 'users' :
             location.pathname === '/admin/notif-bot' ? 'notif-bot' :
               location.pathname === '/admin/log-aktivitas' ? 'log-aktivitas' :
                 location.pathname === '/admin/profile' ? 'profile' : 'dashboard'
   );
 
   const handleLogout = () => {
-    localStorage.removeItem('sitamu_user');
+    logout();
     navigate('/login');
   };
 
@@ -93,16 +85,13 @@ const AdminLayout = ({ children, title, subtitle, activeTab }) => {
         </div>
       </main>
 
-      {/* Flash Toast Notification */}
-      <Flash toast={toast} onClose={() => setToast(null)} />
-
       {/* User Profile Edit Modal */}
       <UserProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         user={user}
-        onProfileUpdated={() => {
-          window.location.reload();
+        onProfileUpdated={(updatedUser) => {
+          if (updateUser) updateUser(updatedUser);
         }}
       />
     </div>

@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import {
-  Users, Calendar, Clock, UserCheck, TrendingUp, Building, ArrowRight
+  Users, Calendar, Clock, UserCheck, TrendingUp, Building, ArrowRight, QrCode
 } from 'lucide-react';
+import QrModal from '../components/modal/QrModal';
 import AdminLayout from '../components/AdminLayout';
 import MonthlyBarChart from '../components/dashboard/MonthlyBarChart';
 import CategoryDoughnutChart from '../components/dashboard/CategoryDoughnutChart';
 import Search from '../components/search';
-import Flash from '../components/flash/flash';
+import StatusConfirmModal from '../components/tamu/confirm';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import useGuestStatus from '../hooks/useGuestStatus';
 
 const DashboardAdmin = () => {
   const [stats, setStats] = useState({
@@ -24,19 +28,7 @@ const DashboardAdmin = () => {
   const [recentGuests, setRecentGuests] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3500);
-  };
-
-  useEffect(() => {
-    fetchStats();
-    fetchRecentGuests();
-  }, []);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
   const fetchStats = async () => {
     try {
@@ -63,25 +55,21 @@ const DashboardAdmin = () => {
     }
   };
 
-  const handleToggleStatus = async (id, currentStatus) => {
-    const nextStatus = currentStatus === 'Berkunjung' ? 'Selesai' : 'Berkunjung';
-    const userStr = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-    const userObj = userStr ? JSON.parse(userStr) : null;
-    const headers = {};
-    if (userObj && (userObj.nama || userObj.username)) {
-      headers['x-user-nama'] = encodeURIComponent(userObj.nama || userObj.username);
-    }
+  useEffect(() => {
+    fetchStats();
+    fetchRecentGuests();
+  }, []);
 
-    try {
-      await axios.patch(`/api/tamu/${id}/status`, { status: nextStatus }, { headers });
-      showToast(`Status tamu diperbarui menjadi "${nextStatus}"`, 'success');
-      fetchStats();
-      fetchRecentGuests();
-    } catch (err) {
-      console.error('Gagal memperbarui status tamu:', err);
-      showToast('Gagal memperbarui status tamu', 'error');
-    }
-  };
+  const {
+    statusConfirmTarget,
+    statusUpdating,
+    openStatusConfirm,
+    closeStatusConfirm,
+    executeStatusToggle
+  } = useGuestStatus(() => {
+    fetchStats();
+    fetchRecentGuests();
+  });
 
   const filteredGuests = recentGuests.filter((g) => {
     if (!searchQuery.trim()) return true;
@@ -180,6 +168,14 @@ const DashboardAdmin = () => {
               placeholder="Cari data di tabel..."
               className="w-full sm:w-64"
             />
+            <button
+              type="button"
+              onClick={() => setIsQrModalOpen(true)}
+              className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              <QrCode className="w-4 h-4 text-sky-100" />
+              Tampilkan Barcode Tamu
+            </button>
             <Link
               to="/admin/tamu"
               className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0 whitespace-nowrap"
@@ -247,7 +243,7 @@ const DashboardAdmin = () => {
                     <td className="p-3 text-center">
                       <button
                         type="button"
-                        onClick={() => handleToggleStatus(g.id, g.status)}
+                        onClick={() => openStatusConfirm(g.id, g.status)}
                         className={`px-3 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all shadow-xs ${
                           g.status === 'Berkunjung'
                             ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
@@ -280,7 +276,18 @@ const DashboardAdmin = () => {
           />
         </div>
       </div>
-      <Flash toast={toast} onClose={() => setToast(null)} />
+
+      {/* Dynamic QR Registration Modal */}
+      <QrModal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} />
+
+      {/* Custom Status Change Confirmation Modal */}
+      <StatusConfirmModal
+        isOpen={!!statusConfirmTarget}
+        currentStatus={statusConfirmTarget?.currentStatus}
+        onClose={closeStatusConfirm}
+        onConfirm={executeStatusToggle}
+        loading={statusUpdating}
+      />
     </AdminLayout>
   );
 };

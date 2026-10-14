@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { X, Camera, User, Key, Shield, Eye, EyeOff, Check, AlertCircle, Lock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
+  const { updateUser } = useAuth();
   const [nama, setNama] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -93,20 +95,9 @@ const UserProfileModal = ({ isOpen, onClose, user, onProfileUpdated }) => {
       if (res.data.success) {
         const updatedUser = res.data.user;
 
-        // Update local session
-        const currentSessionStr = sessionStorage.getItem('sitamu_user') || localStorage.getItem('sitamu_user');
-        if (currentSessionStr) {
-          try {
-            const currentSession = JSON.parse(currentSessionStr);
-            const mergedSession = { ...currentSession, ...updatedUser };
-            sessionStorage.setItem('sitamu_user', JSON.stringify(mergedSession));
-            localStorage.setItem('sitamu_user', JSON.stringify(mergedSession));
-          } catch (e) {
-            sessionStorage.setItem('sitamu_user', JSON.stringify(updatedUser));
-            localStorage.setItem('sitamu_user', JSON.stringify(updatedUser));
-          }
-        } else {
-          sessionStorage.setItem('sitamu_user', JSON.stringify(updatedUser));
+        // Update auth context & session
+        if (updateUser) {
+          updateUser(updatedUser);
         }
 
         setSuccessMsg('Profil berhasil diperbarui!');

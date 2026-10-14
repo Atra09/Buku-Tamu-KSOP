@@ -102,3 +102,93 @@ export const isSessionValid = () => {
     return false;
   }
 };
+
+/**
+ * Memeriksa apakah user login terotentikasi aktif (bukan guest)
+ * @returns {boolean}
+ */
+export const isAuthenticated = () => {
+  return isSessionValid() && !!getStoredToken();
+};
+
+/**
+ * QR Guest Session Helpers
+ */
+export const isQrGuestSession = () => {
+  try {
+    return (
+      sessionStorage.getItem('sitamu_session_type') === 'QR_GUEST' ||
+      !!sessionStorage.getItem('sitamu_qr_token')
+    );
+  } catch (e) {
+    return false;
+  }
+};
+
+export const getStoredQrToken = () => {
+  try {
+    return sessionStorage.getItem('sitamu_qr_token') || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const getStoredQrExpiresAt = () => {
+  try {
+    return sessionStorage.getItem('sitamu_qr_expires_at') || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const setQrGuestSession = (qrToken, guestInfo = {}, expiresAt = null) => {
+  try {
+    sessionStorage.setItem('sitamu_session_type', 'QR_GUEST');
+    sessionStorage.setItem('sitamu_qr_token', qrToken);
+    sessionStorage.setItem('sitamu_guest_info', JSON.stringify(guestInfo));
+    if (expiresAt) {
+      sessionStorage.setItem('sitamu_qr_expires_at', expiresAt);
+    }
+    sessionStorage.setItem('sitamu_last_activity', Date.now().toString());
+  } catch (e) {}
+};
+
+export const clearQrGuestSession = () => {
+  try {
+    sessionStorage.removeItem('sitamu_session_type');
+    sessionStorage.removeItem('sitamu_qr_token');
+    sessionStorage.removeItem('sitamu_guest_info');
+    sessionStorage.removeItem('sitamu_qr_expires_at');
+  } catch (e) {}
+};
+
+/**
+ * Purge immediate unauthorized access attempt by QR guest
+ * CATATAN PENTING (Multi-Guest Pos Jaga):
+ * Hanya menghapus sesi dan mencatat pembatalan pada perangkat tamu pelanggar (local eviction & blacklist).
+ * JANGAN memanggil backend untuk membakar token (/api/qr/revoke) secara global,
+ * agar tamu-tamu lain yang jujur sedang mengisi formulir di meja pos jaga tidak ikut terblokir.
+ */
+export const purgeUnauthorizedGuestAccess = (explicitToken = null) => {
+  const token = explicitToken || getStoredQrToken();
+  if (token) {
+    try {
+      // Tandai permanen di perangkat ini bahwa token ini telah dibatalkan karena pelanggaran akses rute admin
+      localStorage.setItem('ksop_revoked_' + token, JSON.stringify({
+        revoked: true,
+        reason: 'UNAUTHORIZED_ADMIN_ACCESS',
+        time: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  clearSession();
+  clearQrGuestSession();
+  try {
+    sessionStorage.setItem(
+      'sitamu_session_expired',
+      'Akses Ditolak: Anda menggunakan tiket scan barcode tamu. Tiket tidak memiliki izin untuk membuka halaman administrasi/dashboard dan sesi Anda telah diakhiri.'
+    );
+  } catch (e) {}
+};
+
